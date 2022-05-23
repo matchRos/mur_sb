@@ -61,6 +61,7 @@ class inversekinematics():
         self.alpha = [self.alpha_0,self.alpha_1,self.alpha_2,self.alpha_3,self.alpha_4,self.alpha_5,self.alpha_6]
 
         self.solutions = []
+        self.diff_to_goal = []  # difference: current joint angles to goal
         
         #Gelenkwinkel und Transformationen
         self.T0_6 = self.calc_T_0_6()
@@ -319,13 +320,19 @@ class robot():
         self.pos_reached = rospy.Publisher('/ur_initialized', Bool, queue_size=1)
         self.first_call = True
         self.joint_group_vel = Float64MultiArray()
+
+        self.reset()
+
+    def reset(self):
+        """Resets variables depending on ur_path and mir_pos.
+
+        Sets:
         self.acceleration = 0.0
-        
-        self.i = 0.0    # TODO: wofuer?
-        
-        
-        
-    def main(self):
+        self.i = 0.0
+            self.joint_togoal_diff
+            self.joint_goal
+            self.goal
+        """
         rospy.set_param("/ur_initialized", False) 
         first_call = True
         #### Wait for Initialization ####
@@ -333,7 +340,9 @@ class robot():
         path = rospy.wait_for_message("/ur_path", Path)
         request = False
         rate = rospy.Rate(1)
-        while not rospy.is_shutdown() and not request:
+        while not request:
+            if rospy.is_shutdown():
+                return  # remaining code of function doesnt need to be called
             request = rospy.get_param('/mir_initialized', False)
             print("MiR initialized: " + str(request))
             print("Wait for MiR to be initialized...")
@@ -347,13 +356,9 @@ class robot():
         # Goal-transformation from UR-Base to TCP
         t = trans()
         tcp_t_ur_euler, tcp_t_ur_quat = t.compute_transformation(path, mir_pos) 
-        #print("UR_TCP_POS Ziel")
-        #print(tcp_t_ur_euler)
-        #print("")
 
         ### Calculate IK ###
         ik = inversekinematics(tcp_t_ur_quat)
-
 
         #Gelenkwinkelkonfigurationen
         ik.calc_solutions([],0)
@@ -367,19 +372,24 @@ class robot():
         ik_solution = ik.select_solution(ik.solutions)
         
         #UR control
-        self.joint_diff = ik.diff_to_goal
+        self.joint_togoal_diff = ik.diff_to_goal
         self.joint_goal = ik_solution
         self.goal = tcp_t_ur_euler
-        
-        rate = rospy.Rate(100)
-        while not rospy.is_shutdown():
-            self.run()
-            rate.sleep()
-        
-        
+
+        self.acceleration = 0.0
+        self.i = 0.0       #TODO: wofuer?
          
-    def joint_vel(self, i, joint_goal):
-        velocity = 0.05
+    def joint_vel(self, i, joint_goal, velocity=0.05):
+        """Return positive/negative velocity depending on joint goal direction
+
+        Args:
+            i (integer): idx of joint
+            joint_goal (list[float]): joint goal to reach
+            velocity (float, optional): velocity to return. Defaults to 0.05.
+
+        Returns:
+            float: positive/negative velocity or 0 if goal reached
+        """
         curr_joints = self.joint_states #[0.0, 0.0, 0.0, 0.0, 0.0, 0.0] #self.group.get_current_joint_values()
         if curr_joints[i] < joint_goal[i] - 0.001:
             return velocity
@@ -388,20 +398,23 @@ class robot():
         else:            
             return 0.0
         
-        
-    def run(self):
-        print(self.i)
-        self.i += 1.0
+    def calc_accel(self, distance_to_goal):
+        """Calculate Acceleration to accel slowly and decel before reaching goal
+
+        Args:
+            distance_to_goal (float): distance to goal (norm2 of goal minus eef_pos)
+
+        Returns:
+            float: Acceleration factor between 0 and 1
+        """
+        # Accelerate slowly
         if self.acceleration < 61:
             accel = self.acceleration/60
             self.acceleration = self.acceleration + 1
         else:
             accel = 1
-        max_distance = None
 
-        distance_to_goal = math.sqrt(sum((self.goal[i] - self.current_ee_pos[i])**2 for i in range(3)))
-
-        # Slow down if near goal pos
+         # Slow down if near goal pos
         if distance_to_goal < 0.08:
             decel = distance_to_goal/0.08
             if decel < 0.1:
@@ -409,28 +422,33 @@ class robot():
         else:
             decel = 1
 
-        for i in self.joint_diff:
-            if (max_distance is None or abs(i) > max_distance):
-                max_distance = abs(i) 
-        cmd_joint_vel = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        
-        for i in range(6):
-            cmd_joint_vel[i] = self.joint_vel(i, self.joint_goal)
-        for i in range(6):
-            cmd_joint_vel[i] = accel * decel * cmd_joint_vel[i] * abs(self.joint_diff[i]) / abs(max_distance)
+        return accel*decel
+         
+    def run(self):
+        """Publishes Joint velocities to reach EEF-goal. So that all joints approx. reach goal at same time.
+        """
+        print(self.i)
+        self.i += 1.0
+
+        distance_to_goal = math.sqrt(sum((self.goal[i] - self.current_ee_pos[i])**2 for i in range(3)))
+
+        accel = self.calc_accel(distance_to_goal)
+
+        # get max Joint Diff
+        max_joint_diff = max(map(abs, self.joint_togoal_diff))
+
+        cmd_joint_vel = [accel * self.joint_vel(i, self.joint_goal) * abs(self.joint_togoal_diff[i]) / abs(max_joint_diff) for i in range(6)]
         self.joint_group_vel.data = cmd_joint_vel 
-        
-        
+               
         if cmd_joint_vel == [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] and distance_to_goal < 0.05:
             rospy.set_param("/ur_initialized", True) 
             self.joint_group_vel.data = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-            #self.joint_vel_pub.publish(self.joint_group_vel)
+            # self.joint_vel_pub.publish(self.joint_group_vel)   # TODO: warum nicht bzw. if am Schluss? --> Restbewegung?
             rospy.signal_shutdown("Position reached...")
         
         self.joint_vel_pub.publish(self.joint_group_vel)
         
         
-
     def joint_states_cb(self, data):  
         a = data #a = joint_states_mixed
         self.joint_states = [a.position[2], a.position[1], a.position[0], a.position[3], a.position[4], a.position[5]]        
@@ -518,8 +536,12 @@ class trans():
         
 
 if __name__ == "__main__":
+    rate = rospy.Rate(100)
+
     ur = robot()
-    ur.main()
+    while not rospy.is_shutdown():
+        ur.run()
+        rate.sleep()
     
 
         
