@@ -443,7 +443,7 @@ class robot():
         if cmd_joint_vel == [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] and distance_to_goal < 0.05:
             rospy.set_param("/ur_initialized", True) 
             self.joint_group_vel.data = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-            # self.joint_vel_pub.publish(self.joint_group_vel)   # TODO: warum nicht bzw. if am Schluss? --> Restbewegung?
+            # self.joint_vel_pub.publish(self.joint_group_vel)   # TODO: warum nicht? bzw. if am Schluss? --> Restbewegung?
             rospy.signal_shutdown("Position reached...")
         
         self.joint_vel_pub.publish(self.joint_group_vel)

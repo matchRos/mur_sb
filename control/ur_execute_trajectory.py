@@ -34,29 +34,57 @@ class ur_velocity_controller():
         self.test_pub2 = rospy.Publisher("/test_publish", Float64, queue_size=1)
         self.pose_broadcaster = tf.TransformBroadcaster()
         
-        
-        #Parameters for current TCP velocity
-        self.first_time = True
-        self.time_now = 0.0
-        self.time_n_minus_1 = 0.0
-        self.pose_now = Pose()
-        self.pose_n_minus_1 = Pose()
-        self.w_rot = 0.0
-        
         #Moveit - config
         moveit_commander.roscpp_initialize(sys.argv)
         self.group = moveit_commander.MoveGroupCommander("manipulator")
 
-        #parameter for differential kinematics
-        self.time_now = 0.0
+        self.reset()
+
+    def reset(self):
+        """Resets all variables
+        """
+
+        #Parameters for current TCP velocity / differential kinematics
+        self.first_call = True
+        self.csv_first_call = True
+        self.time_n = 0.0
         self.time_n_minus_1 = 0.0
-        self.pose_now = Pose()
+        self.pose_n = Pose()
         self.pose_n_minus_1 = Pose()
+        self.w_rot = 0.0
+
+
+        rospy.wait_for_message('/mur_tcp_pose', Pose)
+        rospy.loginfo("TCP-Pose received ...")
+        rospy.wait_for_message('/mur/mir/robot_pose', Pose)
+        rospy.loginfo("MiR-Pose received ...")
+        rospy.wait_for_message('/tool0_pose', Pose)
+        rospy.loginfo("Tool0-Pose received ...")
         
-        self.run()
+        rospy.set_param("/ur_initialized", False)   # TODO: was passiert wenn ur_start_pose zu frueh gestartet wurde? (param schon true)
+        ur_request = rospy.get_param("/ur_initialized", False)
+        
+        while not rospy.is_shutdown() and ur_request == False:
+            ur_request = rospy.get_param("/ur_initialized", False)
+            if ur_request == True:
+                print("UR initialized")
+            else: 
+                #print("Waiting for UR to be initialized...")
+                pass
+        rospy.loginfo("Running ...")
+        
+        self.control_rate = 100 #rospy.get_param("~self.control_rate")
+        self.i = 1  # number of calls of run(): trajectory idx
 
     
     def get_distance_mir_ur(self):
+        """Calculates distance from base of Mir to TCP of UR in MiR-coordinates.
+
+        Returns:
+            float: total distance
+            float: distance in x
+            float: distance in y
+        """
         #Transformation ur_base to tcp
         trans_ur = [self.ur_pose.position.x, self.ur_pose.position.y, self.ur_pose.position.z]
         rot_ur = [self.ur_pose.orientation.x, self.ur_pose.orientation.y, self.ur_pose.orientation.z, self.ur_pose.orientation.w]
@@ -85,10 +113,15 @@ class ur_velocity_controller():
     
     
     
-    def get_tcp_initial_vel(self, i):
+    def get_tcp_initial_vel(self):
+        """Get velocity of TCP (mir+ur) induced by velocity of mir in world coordinates (no velocity of ur relative to mir)
+
+        Returns:
+            (float): (v_x, v_y)
+        """
         v_trans = self.specified_mir_vel.twist.linear.x
         radius, dis_x, dis_y = self.get_distance_mir_ur()
-        filter = 1.0
+        # filter = 1.0
         #self.w_rot = self.w_rot * (1-filter) + self.mir_trajectorie[1][i] * filter #self.specified_mir_vel.twist.angular.z * filter
         #v_rot = self.w_rot * radius
         v_rot = self.specified_mir_vel.twist.angular.z * radius
@@ -104,14 +137,19 @@ class ur_velocity_controller():
         mir_orientation = transformations.quaternion_matrix([self.mir_pose.orientation.x, self.mir_pose.orientation.y, self.mir_pose.orientation.z, self.mir_pose.orientation.w])
         v_x_world = mir_orientation[0][0] * v_x_mir + mir_orientation[0][1] *  v_y_mir
         v_y_world = mir_orientation[1][0] * v_x_mir + mir_orientation[1][1] *  v_y_mir
-        print("mir")
-        print(v_x_mir, v_y_mir)
-        print("welt")
-        print(v_x_world, v_y_world)
         return [v_x_world, v_y_world]
     
     
-    def trajectory_velocity(self, act_pose, set_pose_x, set_pose_y, set_pose_phi, v_target, i):
+    def trajectory_velocity(self, set_pose_phi, v_target):
+        """Calculates v_x, v_y by rotation angle phi
+
+        Args:
+            set_pose_phi (float): orientation of trajectory in radians
+            v_target (float): target velocity of trajectory
+
+        Returns:
+            list[float]: [v_x, v_y]
+        """
         # x_diff = set_pose_x - act_pose.position.x
         # y_diff = set_pose_y - act_pose.position.y
         # alpha = math.atan2(y_diff, x_diff)
@@ -121,7 +159,15 @@ class ur_velocity_controller():
         return [v_x, v_y]
 
     
-    def get_tcp_vel_ur_base(self, final_tcp_vel_world):
+    def transf_velocity_world_to_mirbase(self, final_tcp_vel_world):
+        """transform velocity in world coordinates to velocity in mir coordinates. (Approx. the same as in UR coordinates)
+
+        Args:
+            final_tcp_vel_world (list[float]): [v_x, v_y] velocity of TCP in world coordinates
+
+        Returns:
+            list[float]: [v_x_mir, v_y_mir] velocity of TCP in MIR-coordinates
+        """
         mir_orientation = transformations.euler_from_quaternion([self.mir_pose.orientation.x, self.mir_pose.orientation.y, self.mir_pose.orientation.z, self.mir_pose.orientation.w])
         mir_rot_about_z = mir_orientation[2]
         
@@ -132,6 +178,14 @@ class ur_velocity_controller():
 
     
     def differential_inverse_kinematics_ur(self, velocities):
+        """Calculate velocities of joints from cartesian TCP-Velocities
+
+        Args:
+            velocities (list[float]): dim6
+
+        Returns:
+            Float64MultiArray: joint_group_vel
+        """
         joint_group_vel = Float64MultiArray()
         current_joints = self.joint_states#self.group.get_current_joint_values()
         jm = np.array(self.group.get_jacobian_matrix(current_joints))
@@ -147,101 +201,81 @@ class ur_velocity_controller():
         
 
     def velocity_controller(self, v_target):
+        """Sets control rate in proportion to the target velocity. r_new = r_old*(v_target/v + 2)/3.
+        NOT IN USE
+
+        Args:
+            v_target (float): absolute target velocity
+        """
         if self.first_call:
-            self.pose_now = self.tcp_pose
-            self.time_now = rospy.get_time()
+            self.pose_n = self.tcp_pose
+            self.time_n = rospy.get_time()
             self.first_call = False
         else:
-            self.time_n_minus_1 = self.time_now
-            self.pose_n_minus_1 = self.pose_now
-            self.pose_now = self.tcp_pose
-            self.time_now = rospy.get_time()
-            time_diff = self.time_now - self.time_n_minus_1
+            self.time_n_minus_1 = self.time_n
+            self.pose_n_minus_1 = self.pose_n
+            self.pose_n = self.tcp_pose
+            self.time_n = rospy.get_time()
+            time_diff = self.time_n - self.time_n_minus_1
 
-            x_vel = (self.pose_now.position.x - self.pose_n_minus_1.position.x)/time_diff
-            y_vel = (self.pose_now.position.y - self.pose_n_minus_1.position.y)/time_diff
+            x_vel = (self.pose_n.position.x - self.pose_n_minus_1.position.x)/time_diff
+            y_vel = (self.pose_n.position.y - self.pose_n_minus_1.position.y)/time_diff
             velocity = pow(pow(x_vel,2) + pow(y_vel,2),0.5)
             
             if velocity == 0:
-                relation = 1.0
+                v_target_relativ = 1.0
             else:
-                relation = abs(v_target) / velocity 
+                v_target_relativ = abs(v_target) / velocity 
                 
-            actual_goal_rate = self.control_rate * relation
-            muted_rate = (actual_goal_rate + 2 * self.control_rate) / 3
-            self.control_rate = muted_rate
-            print(self.control_rate)
-
-            #if velocity < v_target - 0.01:
-            #    self.control_rate += 1
-            #elif velocity > v_target + 0.01:
-            #    self.control_rate -= 1
-            #else:
-            #    pass
+            actual_goal_rate = self.control_rate * v_target_relativ
+            self.control_rate  = (actual_goal_rate + 2 * self.control_rate) / 3 #muted_rate
 
 
-    def position_controller(self, target_pos_x, target_pos_y,actual_pos_x, actual_pos_y):
-        # x_diff = expected_pos_x - self.tcp_pose.position.x
-        # y_diff = expected_pos_y - self.tcp_pose.position.y    
+    def position_controller(self, target_pos_x, target_pos_y,actual_pos_x, actual_pos_y, K_p=0.1):
+        """Proportional-controller. Calculates error in x,y and returns controller-output
+
+        Args:
+            target_pos_x (float): goal pos
+            target_pos_y (float): goal pos
+            actual_pos_x (float): current pos
+            actual_pos_y (float): current pos
+            K_p (float, optional): Proportional Term. Defaults to 0.1.
+
+        Returns:
+            (K_p*e_x, K_p*e_y, distance, e_x, e_y)
+        """  
         e_x = target_pos_x - actual_pos_x   
         e_y = target_pos_y - actual_pos_y
         distance = pow(pow(e_x, 2) + pow(e_y, 2), 0.5)
-        #print("tolerance: " + str(distance))
-        K_p = 0.1
         return K_p*e_x, K_p*e_y, distance, e_x, e_y      
         
 
         
     def run(self):
-        rospy.wait_for_message('/mur_tcp_pose', Pose)
-        print("TCP-Pose received ...")
-        rospy.wait_for_message('/mur/mir/robot_pose', Pose)
-        print("MiR-Pose received ...")
-        rospy.wait_for_message('/tool0_pose', Pose)
-        print("Tool0-Pose received ...")
-        
-        rospy.set_param("/ur_initialized", False)
-        ur_request = rospy.get_param("/ur_initialized", False)
-        rate = rospy.Rate(1)
-        while not rospy.is_shutdown() and ur_request == False:
-            ur_request = rospy.get_param("/ur_initialized", False)
-            if ur_request == True:
-                print("UR initialized")
-            else: 
-                #print("Waiting for UR to be initialized...")
-                pass
-        print("Running ...")
-        
-        self.first_call = True
-        self.control_rate = 100 #rospy.get_param("~self.control_rate")
+        """calculates joint velocities by cartesian position error and trajectory velocity. Takes current MiR velocity into account. Trajectory velocity proportional to control rate.
+        """
         rate = rospy.Rate(self.control_rate)
-        i = 1
-        csv_first_call = True
-        
-        while not rospy.is_shutdown() and i < len(self.trajectorie[3]):
+        while not rospy.is_shutdown() and self.i < len(self.trajectorie[3]):
             act_pose        = self.tcp_pose
-            set_pose_x      = self.trajectorie[0][i]
-            set_pose_y      = self.trajectorie[1][i]
-            set_pose_phi    = self.trajectorie[2][i]
-            v_target        = self.trajectorie[3][i] * self.control_rate
-            w_target        = self.trajectorie[4][i] * self.control_rate
-            
-            #print("Aktuelle pose" + str(act_pose.position.x) + ", " + str(act_pose.position.y))
-            #print("Zielpose" + str(set_pose_x) + ", " + str(set_pose_y))
+            set_pose_x      = self.trajectorie[0][self.i]
+            set_pose_y      = self.trajectorie[1][self.i]
+            set_pose_phi    = self.trajectorie[2][self.i]
+            v_target        = self.trajectorie[3][self.i] * self.control_rate
+            w_target        = self.trajectorie[4][self.i] * self.control_rate
             
             #position controller
             u_x, u_y, distance, dis_x, dis_y = self.position_controller(set_pose_x, set_pose_y, act_pose.position.x, act_pose.position.y)
-            #u_x = 0.0
-            #u_y = 0.0
             
-            tcp_initial_vel = self.get_tcp_initial_vel(i)
-            print("Durchlauf: " + str(i))
-            target_tcp_vel = self.trajectory_velocity(act_pose, set_pose_x, set_pose_y, set_pose_phi, v_target, i)
+            tcp_initial_vel = self.get_tcp_initial_vel()    # only the part induced by mir to world velocity 
+            print("Durchlauf: " + str(self.i))
+            target_tcp_vel = self.trajectory_velocity(set_pose_phi, v_target)
+
+            # Goal velocity of ur relative to mir:
             final_tcp_vel_world = [target_tcp_vel[0] - tcp_initial_vel[0] + u_x, target_tcp_vel[1] - tcp_initial_vel[1] + u_y]
-            final_tcp_vel_ur_base = self.get_tcp_vel_ur_base(final_tcp_vel_world)
+            final_tcp_vel_mir_base = self.transf_velocity_world_to_mirbase(final_tcp_vel_world)
             
             #TCP velocity in ur_base_link
-            tcp_vel_ur = [final_tcp_vel_ur_base[0], final_tcp_vel_ur_base[1], 0, 0, 0, 0]
+            tcp_vel_ur = [final_tcp_vel_mir_base[0], final_tcp_vel_mir_base[1], 0, 0, 0, 0]
             joint_group_vel = self.differential_inverse_kinematics_ur(tcp_vel_ur)
 
             #publish joint velocities
@@ -249,18 +283,18 @@ class ur_velocity_controller():
             self.test_pub.publish(joint_group_vel)
             self.joint_group_vel_pub.publish(joint_group_vel)
 
-            print(i, distance, dis_x, dis_y)
-            if csv_first_call:
+            print(self.i, distance, dis_x, dis_y)
+            if self.csv_first_call:
                 with open('/home/rosmatch/Dokumente/tolerance_no_con_2_3.csv', 'w') as test:
                     writer = csv.writer(test)
-                    writer.writerow([i, distance, dis_x, dis_y])
-                    csv_first_call = False
+                    writer.writerow([self.i, distance, dis_x, dis_y])
+                    self.csv_first_call = False
             else:  
                 with open('/home/rosmatch/Dokumente/tolerance_no_con_2_3.csv', 'a') as test:
                     writer = csv.writer(test)
-                    writer.writerow([i, distance, dis_x, dis_y])
+                    writer.writerow([self.i, distance, dis_x, dis_y])
             
-            i += 1
+            self.i += 1
 
             rate.sleep()
             
@@ -341,3 +375,4 @@ class ur_velocity_controller():
 if __name__ == "__main__":
     rospy.init_node("ur_velocity_controller")
     velocity = ur_velocity_controller()
+    velocity.run()
