@@ -20,15 +20,19 @@ class ur_velocity_controller():
     
     
     def __init__(self):
-        rospy.Subscriber("/ur_path", Path, self.path_cb)
-        rospy.Subscriber('/mur/mir/cmd_vel', TwistStamped, self.mir_vel_cb)
-        #rospy.Subscriber('/mur/mir/odom', Odometry, self.mir_vel_odom_cb)
-        rospy.Subscriber('/mur_tcp_pose', Pose, self.tcp_pose_cb)
-        rospy.Subscriber('/mur/mir/robot_pose', Pose, self.mir_pose_cb)
-        rospy.Subscriber('/tool0_pose', Pose, self.ur_pose_cb)
         rospy.Subscriber('ur_trajectory', Path, self.ur_trajectory_cb)
-        rospy.Subscriber('mir_trajectory', Path, self.mir_trajectory_cb)
+        rospy.Subscriber('/mur_tcp_pose', Pose, self.tcp_pose_cb)
+        rospy.Subscriber('/tool0_pose', Pose, self.ur_pose_cb)
         rospy.Subscriber('/joint_states', JointState, self.joint_states_cb)
+        
+        rospy.Subscriber('/mur/mir/cmd_vel', TwistStamped, self.mir_vel_cb)
+        rospy.Subscriber('/mur/mir/robot_pose', Pose, self.mir_pose_cb)
+        
+        # Subscribers Not in use:
+        rospy.Subscriber("/ur_path", Path, self.path_cb)
+        rospy.Subscriber('mir_trajectory', Path, self.mir_trajectory_cb)
+        #rospy.Subscriber('/mur/mir/odom', Odometry, self.mir_vel_odom_cb)
+
         self.joint_group_vel_pub = rospy.Publisher("/joint_group_vel_controller/command", Float64MultiArray, queue_size=1)
         self.test_pub = rospy.Publisher("/joint_group_vel_controller/command_test", Float64MultiArray, queue_size=1)
         self.test_pub2 = rospy.Publisher("/test_publish", Float64, queue_size=1)
@@ -198,37 +202,6 @@ class ur_velocity_controller():
         joint_group_vel.data = (np.asarray(joint_velocities)).flatten()
         
         return joint_group_vel
-        
-
-    def velocity_controller(self, v_target):
-        """Sets control rate in proportion to the target velocity. r_new = r_old*(v_target/v + 2)/3.
-        NOT IN USE
-
-        Args:
-            v_target (float): absolute target velocity
-        """
-        if self.first_call:
-            self.pose_n = self.tcp_pose
-            self.time_n = rospy.get_time()
-            self.first_call = False
-        else:
-            self.time_n_minus_1 = self.time_n
-            self.pose_n_minus_1 = self.pose_n
-            self.pose_n = self.tcp_pose
-            self.time_n = rospy.get_time()
-            time_diff = self.time_n - self.time_n_minus_1
-
-            x_vel = (self.pose_n.position.x - self.pose_n_minus_1.position.x)/time_diff
-            y_vel = (self.pose_n.position.y - self.pose_n_minus_1.position.y)/time_diff
-            velocity = pow(pow(x_vel,2) + pow(y_vel,2),0.5)
-            
-            if velocity == 0:
-                v_target_relativ = 1.0
-            else:
-                v_target_relativ = abs(v_target) / velocity 
-                
-            actual_goal_rate = self.control_rate * v_target_relativ
-            self.control_rate  = (actual_goal_rate + 2 * self.control_rate) / 3 #muted_rate
 
 
     def position_controller(self, target_pos_x, target_pos_y,actual_pos_x, actual_pos_y, K_p=0.1):
@@ -312,6 +285,10 @@ class ur_velocity_controller():
     
     
     def ur_trajectory_cb(self,Path):
+        """Vorgegebene Trajektorie
+        TODO: was passiert bei Neuvorgabe Trajektorie?
+            in run(): springt von idx i der alten auf idx i der neuen Trajektorie?
+        """
         trajectory_x = []
         trajectory_y = []
         trajectory_phi = []
@@ -330,8 +307,71 @@ class ur_velocity_controller():
 
         self.trajectorie = [trajectory_x, trajectory_y, trajectory_phi, trajectory_v, trajectory_w]
         rospy.loginfo("trajectory received")
+           
+    def mir_vel_cb(self, data):
+        """cmd_vel wird verwendet
+        TODO: stattdessen wahre MiR-Geschwindigkeit?
+        """
+        self.specified_mir_vel = data
+ 
+    def tcp_pose_cb(self, data):
+        """Actual tcp pose
+        """
+        self.tcp_pose = data
+        
+    def mir_pose_cb(self, data):
+        """Nur für orientation. Transformationen zwischen v_x_mir und v_x_world.
+        """
+        self.mir_pose = data
+        
+    def ur_pose_cb(self, data):
+        """Verwendet in "get_distance_mir_ur()"
+        """
+        self.ur_pose = data
 
+    # WIRD NICHT VERWENDET:
+    ############################
+    def velocity_controller(self, v_target):
+        """Sets control rate in proportion to the target velocity. r_new = r_old*(v_target/v + 2)/3.
+        NOT IN USE
+
+        Args:
+            v_target (float): absolute target velocity
+        """
+        if self.first_call:
+            self.pose_n = self.tcp_pose
+            self.time_n = rospy.get_time()
+            self.first_call = False
+        else:
+            self.time_n_minus_1 = self.time_n
+            self.pose_n_minus_1 = self.pose_n
+            self.pose_n = self.tcp_pose
+            self.time_n = rospy.get_time()
+            time_diff = self.time_n - self.time_n_minus_1
+
+            x_vel = (self.pose_n.position.x - self.pose_n_minus_1.position.x)/time_diff
+            y_vel = (self.pose_n.position.y - self.pose_n_minus_1.position.y)/time_diff
+            velocity = pow(pow(x_vel,2) + pow(y_vel,2),0.5)
+            
+            if velocity == 0:
+                v_target_relativ = 1.0
+            else:
+                v_target_relativ = abs(v_target) / velocity 
+                
+            actual_goal_rate = self.control_rate * v_target_relativ
+            self.control_rate  = (actual_goal_rate + 2 * self.control_rate) / 3 #muted_rate
+
+    def path_cb(self, data):
+        """Wird nicht verwendet
+        """
+        self.ur_path = data
+    
     def mir_trajectory_cb(self,Path):
+        """Nicht gebraucht, da dies vorgegebener Pfad, stattdessen wahreer Pfad
+
+        Args:
+            Path (_type_): _description_
+        """
         trajectory_x = []
         trajectory_y = []
         trajectory_phi = []
@@ -350,27 +390,11 @@ class ur_velocity_controller():
 
         self.mir_trajectorie = [trajectory_v, trajectory_w]
         rospy.loginfo("trajectory received")
-                
-    def mir_vel_cb(self, data):
-        self.specified_mir_vel = data
         
     def mir_vel_odom_cb(self, data):
-        self.specified_mir_vel = data
- 
-    def tcp_pose_cb(self, data):
-        self.tcp_pose = data
-        
-    def mir_pose_cb(self, data):
-        self.mir_pose = data
-        
-    def ur_pose_cb(self, data):
-        self.ur_pose = data
-        
-    def path_cb(self, data):
-        self.ur_path = data
-       
-       
-       
+        """Wird nicht verwendet. Stattdessen mir_vel_cb
+        """
+        self.specified_mir_vel = data   
         
 if __name__ == "__main__":
     rospy.init_node("ur_velocity_controller")
