@@ -320,7 +320,7 @@ class ur_velocity_controller():
         self.tcp_pose = data
         
     def mir_pose_cb(self, data):
-        """Nur für orientation. Transformationen zwischen v_x_mir und v_x_world.
+        """Nur fuer orientation. Transformationen zwischen v_x_mir und v_x_world.
         """
         self.mir_pose = data
         
