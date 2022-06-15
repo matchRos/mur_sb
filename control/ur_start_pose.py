@@ -473,7 +473,7 @@ class robot():
         
         
 class trans():
-    def __init__(self) -> None:
+    def __init__(self):
         """calculate transformation for mur
         """
         #Transformation MiR-Base zu UR-Base (statisch)   
