@@ -2,7 +2,6 @@
 
 import math
 import sys
-from tkinter.messagebox import NO
 
 import moveit_commander
 import numpy as np
@@ -473,7 +472,7 @@ class robot():
         
         
 class trans():
-    def __init__(self) -> None:
+    def __init__(self):
         """calculate transformation for mur
         """
         #Transformation MiR-Base zu UR-Base (statisch)   
@@ -537,9 +536,9 @@ class trans():
         
 
 if __name__ == "__main__":
-    rate = rospy.Rate(100)
 
     ur = robot()
+    rate = rospy.Rate(100)
     while not rospy.is_shutdown():
         ur.run()
         rate.sleep()
