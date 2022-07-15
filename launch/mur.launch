@@ -7,7 +7,7 @@
  
    
     <!-- Bringup the base of the mur -->
-    <include file="$(find mur_launch_hardware)/launch/mur_base.launch" pass_all_args="true" ns="ur">      
+    <include file="$(find mur_launch_hardware)/launch/mur_base.launch" pass_all_args="true" ns="ur"/>      
 
 
     <!-- Bringup the ur -->   
