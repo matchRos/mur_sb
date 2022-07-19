@@ -9,4 +9,6 @@ auf Master (/dev/sdb3 fuer altes SKript):
 ## Infos
 Testvorgabe Objekt fuer ur_start..: scripts/publisher wall
 
-match_mobile_robotics:mur_controller:load_controller.py muss vorhanden sein für mur.launch
+rosparam /mir_initialized muss true sein für ur_start_pose.py
+
+Noch math domain errors bei schelchter Ausrichtung UR (acos?)
