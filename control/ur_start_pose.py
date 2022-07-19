@@ -154,7 +154,7 @@ class inversekinematics():
     def calc_q3(self, T1_4):
         P1_4x = T1_4.item(3)
         P1_4z = T1_4.item(11)
-        P1_4xz = math.sqrt(P1_4x * P1_4x + P1_4z * P1_4z)
+        P1_4xz = math.sqrt(P1_4x * P1_4x + P1_4z * P1_4z)   # TODO: P1_4xz² is sufficient (see below)
 
         # TODO: check if value is in domain ("Value Error: math domain error")
         return [-math.acos((P1_4xz * P1_4xz - self.a2 * self.a2 - self.a3 * self.a3) / (2 * self.a2 * self.a3)),
