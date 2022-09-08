@@ -2,7 +2,7 @@
 
 import numpy as np
 import rospy
-from geometry_msgs.msg import TwistStamped, Pose
+from geometry_msgs.msg import TwistStamped, Pose, Twist, PoseWithCovarianceStamped
 from tf import transformations
 import math
 import sys
@@ -15,32 +15,33 @@ import tf
 from sensor_msgs.msg import JointState
 import csv
 
-
+from robot_mats.jacobians.jacobian_ur_16_eef import getJacobianUr16_base_link_inertiaUr16_wrist_3_link as getJacobian
 class ur_velocity_controller():
     
     
-    def __init__(self):
+    def __init__(self, ns="mur216", group_name="UR_arm"):
         rospy.Subscriber('ur_trajectory', Path, self.ur_trajectory_cb)
         rospy.Subscriber('/mur_tcp_pose', Pose, self.tcp_pose_cb)
         rospy.Subscriber('/tool0_pose', Pose, self.ur_pose_cb)
-        rospy.Subscriber('/joint_states', JointState, self.joint_states_cb)
+        rospy.Subscriber('joint_states', JointState, self.joint_states_cb)
         
-        rospy.Subscriber('/mur/mir/cmd_vel', TwistStamped, self.mir_vel_cb)
-        rospy.Subscriber('/mur/mir/robot_pose', Pose, self.mir_pose_cb)
+        self.specified_mir_vel = TwistStamped()
+        rospy.Subscriber('mobile_base_controller/cmd_vel', Twist, self.mir_vel_cb)
+        rospy.Subscriber('amcl_pose', PoseWithCovarianceStamped, self.mir_pose_cb)
         
         # Subscribers Not in use:
-        rospy.Subscriber("/ur_path", Path, self.path_cb)
+        rospy.Subscriber("ur_path", Path, self.path_cb)
         rospy.Subscriber('mir_trajectory', Path, self.mir_trajectory_cb)
         #rospy.Subscriber('/mur/mir/odom', Odometry, self.mir_vel_odom_cb)
 
-        self.joint_group_vel_pub = rospy.Publisher("/joint_group_vel_controller/command", Float64MultiArray, queue_size=1)
+        self.joint_group_vel_pub = rospy.Publisher("joint_group_vel_controller/command", Float64MultiArray, queue_size=1)
         self.test_pub = rospy.Publisher("/joint_group_vel_controller/command_test", Float64MultiArray, queue_size=1)
         self.test_pub2 = rospy.Publisher("/test_publish", Float64, queue_size=1)
         self.pose_broadcaster = tf.TransformBroadcaster()
         
         #Moveit - config
         moveit_commander.roscpp_initialize(sys.argv)
-        self.group = moveit_commander.MoveGroupCommander("manipulator")
+        # self.group = moveit_commander.MoveGroupCommander(group_name, ns=ns, robot_description= ns+"/robot_description",wait_for_servers=5.0)
 
         self.reset()
 
@@ -60,7 +61,7 @@ class ur_velocity_controller():
 
         rospy.wait_for_message('/mur_tcp_pose', Pose)
         rospy.loginfo("TCP-Pose received ...")
-        rospy.wait_for_message('/mur/mir/robot_pose', Pose)
+        rospy.wait_for_message('amcl_pose', Pose)
         rospy.loginfo("MiR-Pose received ...")
         rospy.wait_for_message('/tool0_pose', Pose)
         rospy.loginfo("Tool0-Pose received ...")
@@ -192,7 +193,8 @@ class ur_velocity_controller():
         """
         joint_group_vel = Float64MultiArray()
         current_joints = self.joint_states#self.group.get_current_joint_values()
-        jm = np.array(self.group.get_jacobian_matrix(current_joints))
+        # jm = np.array(self.group.get_jacobian_matrix(current_joints))
+        jm = getJacobian(current_joints)
         jacobian_matrix = np.matrix(jm)
         jacobian_inverse = np.linalg.inv(jacobian_matrix)
         
@@ -312,17 +314,18 @@ class ur_velocity_controller():
         """cmd_vel wird verwendet
         TODO: stattdessen wahre MiR-Geschwindigkeit?
         """
-        self.specified_mir_vel = data
+
+        self.specified_mir_vel.twist=data
  
     def tcp_pose_cb(self, data):
         """Actual tcp pose
         """
         self.tcp_pose = data
         
-    def mir_pose_cb(self, data):
+    def mir_pose_cb(self, data=PoseWithCovarianceStamped()):
         """Nur fuer orientation. Transformationen zwischen v_x_mir und v_x_world.
         """
-        self.mir_pose = data
+        self.mir_pose = data.pose.pose
         
     def ur_pose_cb(self, data):
         """Verwendet in "get_distance_mir_ur()"

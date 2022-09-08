@@ -1,0 +1,3 @@
+[submodule "control/bauschaum/match_lib"]
+	path = control/bauschaum/match_lib
+	url = https://github.com/pumablattlaus/match_lib.git

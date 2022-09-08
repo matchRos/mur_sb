@@ -9,11 +9,11 @@ def talker():
     rospy.init_node('pub_wall_pose', anonymous=True)
     
     pose_wall = PoseWithCovarianceStamped()
-    pose_wall.pose.pose.position.x = 4.8
-    pose_wall.pose.pose.position.y = 10.0
+    pose_wall.pose.pose.position.x = -2.0
+    pose_wall.pose.pose.position.y = 1.0
     
-    pose_wall.pose.pose.orientation.z = 0.687
-    pose_wall.pose.pose.orientation.w = 0.725
+    pose_wall.pose.pose.orientation.z = 0.0
+    pose_wall.pose.pose.orientation.w = 1.0
     pub.publish(pose_wall)
 
 if __name__ == '__main__':

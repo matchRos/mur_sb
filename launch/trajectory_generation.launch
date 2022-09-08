@@ -5,18 +5,26 @@
     <arg name="master_pose_topic" default="/virtual_master/master_pose"/>
     <arg name="master_vel_topic" default="/virtual_master/master_vel"/>
 
-    <node name="parse_path_trafo" type="parse_path_trafo.py" pkg="bauschaum" output="screen"/>
+    <arg name="tf_prefix"    default="mur216" />
+    <arg name="model_name" default="mur216"/>
+    <arg name="prefix" value="UR16/" doc="Prefix for the UR16 links"/>
 
-    <node name="trajectory_generation" type="trajectory_generation.py" pkg="bauschaum" output="screen"/>
+    <group ns = "$(arg model_name)">
+
+        <node name="parse_path_trafo" type="parse_path_trafo.py" pkg="bauschaum" output="screen"/>
+
+        <node name="trajectory_generation" type="trajectory_generation.py" pkg="mur_sb" output="screen"/>
 
 
-    <node name="execute_trajectories" type="execute_trajectories_dynamic.py" pkg="formation_controller" output="screen">
-            <rosparam command="load" file="$(find bauschaum)/config/trajectory_generation_config.yaml"/>
-    </node>
+        <node name="execute_trajectories" type="execute_trajectories_dynamic.py" pkg="mur_sb" output="screen">
+                <rosparam command="load" file="$(find bauschaum)/config/trajectory_generation_config.yaml"/>
+        </node>
 
-    <node name="ur_start_pose" type="ur_start_pose.py" pkg="mur_sb" output="screen"/> 
+        <node name="ur_start_pose" type="ur_start_pose.py" pkg="mur_sb" output="screen"/> 
 
-    <!-- <node name="ur_execute_trajectory" type="ur_execute_trajectory.py" pkg="mur_sb" output="screen">
-            <rosparam command="load" file="$(find bauschaum)/config/trajectory_generation_config.yaml"/>
-    </node> -->
+        <!-- <node name="ur_execute_trajectory" type="ur_execute_trajectory.py" pkg="mur_sb" output="screen">
+                <rosparam command="load" file="$(find bauschaum)/config/trajectory_generation_config.yaml"/>
+        </node> -->
+    </group>
+    <!-- <node name="ur_start_pose" type="ur_start_pose.py" pkg="mur_sb" output="screen"/>  -->
 </launch>

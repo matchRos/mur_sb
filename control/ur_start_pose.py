@@ -6,7 +6,7 @@ import sys
 import moveit_commander
 import numpy as np
 import rospy
-from geometry_msgs.msg import Pose
+from geometry_msgs.msg import Pose, PoseWithCovarianceStamped
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Bool, Float64MultiArray
 from tf import transformations
@@ -18,14 +18,15 @@ np.set_printoptions(precision=8,suppress=True)
 
 
 class inversekinematics():
-    def __init__(self, pose):
+    def __init__(self, pose,ns="mur216", group_name="UR_arm"):
         # Eingabe der Zielposition
         self.goal_pose = pose 
-        print("Pose: ")
-        print(pose)
-        moveit_commander.roscpp_initialize(sys.argv)
-        self.group = moveit_commander.MoveGroupCommander("manipulator")
-        joint_states_mixed = rospy.wait_for_message('/joint_states', JointState)
+        rospy.loginfo("Pose: ")
+        rospy.loginfo(pose)
+        # moveit_commander.roscpp_initialize(sys.argv)
+        # # group_name = "manipulator"
+        # moveit_commander.MoveGroupCommander(group_name, ns=ns, robot_description= ns+"/robot_description",wait_for_servers=5.0)
+        joint_states_mixed = rospy.wait_for_message('joint_states', JointState)
         self.joint_values = [joint_states_mixed.position[2], joint_states_mixed.position[1], joint_states_mixed.position[0], joint_states_mixed.position[3], joint_states_mixed.position[4], joint_states_mixed.position[5]]
         #self.joint_values = self.group.get_current_joint_values()
 
@@ -81,7 +82,7 @@ class inversekinematics():
         self.t0_6[0][3] = -self.goal_pose[0]
         self.t0_6[1][3] = -self.goal_pose[1]
         self.t0_6[2][3] = self.goal_pose[2]
-        print(self.t0_6)
+        rospy.loginfo(self.t0_6)
         return self.t0_6#np.around(self.t0_6, 10)
 
 
@@ -233,7 +234,7 @@ class inversekinematics():
         A = self.calc_T_ip_i(solution[0],1)
         for i in range(1,6):
             A = A*self.calc_T_ip_i(solution[i],i+1)
-        print(A-self.T0_6)
+        rospy.loginfo(A-self.T0_6)
 
 
     def solution_min_diff(self, solutions, difference_solutions, pref):
@@ -309,14 +310,14 @@ class inversekinematics():
         
         
 class robot():  
-    def __init__(self):
+    def __init__(self, ns="mur216", group_name="UR_arm"):
         rospy.init_node("ur_start")
         rospy.Subscriber('/tool0_pose', Pose, self.vel_cb)
-        rospy.Subscriber('/joint_states', JointState, self.joint_states_cb)
+        rospy.Subscriber('joint_states', JointState, self.joint_states_cb)
         moveit_commander.roscpp_initialize(sys.argv)
-        self.robot = moveit_commander.RobotCommander()
-        self.group = moveit_commander.MoveGroupCommander("manipulator")
-        self.joint_vel_pub = rospy.Publisher("/joint_group_vel_controller/command", Float64MultiArray, queue_size=1)
+        # self.robot = moveit_commander.RobotCommander(robot_description= ns+"/robot_description") #, ns="ns")
+        # self.group = moveit_commander.MoveGroupCommander(group_name, robot_description= ns+"/robot_description",wait_for_servers=5.0) #, ns=ns)
+        self.joint_vel_pub = rospy.Publisher("/"+ns+"/joint_group_vel_controller/command", Float64MultiArray, queue_size=1)
         self.pos_reached = rospy.Publisher('/ur_initialized', Bool, queue_size=1)
         self.first_call = True
         self.joint_group_vel = Float64MultiArray()
@@ -336,23 +337,21 @@ class robot():
         rospy.set_param("/ur_initialized", False) 
         first_call = True
         #### Wait for Initialization ####
-        #print("test")
-        path = rospy.wait_for_message("/ur_path", Path)
+        path = rospy.wait_for_message("ur_path", Path)
         request = False
         rate = rospy.Rate(1)
         while not request:
             if rospy.is_shutdown():
                 return  # remaining code of function doesnt need to be called
             request = rospy.get_param('/mir_initialized', False)
-            print("MiR initialized: " + str(request))
-            print("Wait for MiR to be initialized...")
+            rospy.loginfo("Wait for MiR to be initialized...")
+            rospy.loginfo(f"MiR initialized: {str(request)}")
             rate.sleep()
         
         
         if first_call:  # TODO: first call always true? 
-            mir_pos = rospy.wait_for_message('/mur/mir/robot_pose', Pose)
+            mir_pos = rospy.wait_for_message('amcl_pose', PoseWithCovarianceStamped).pose.pose
             first_call = False
-        
         # Goal-transformation from UR-Base to TCP
         t = trans()
         tcp_t_ur_euler, tcp_t_ur_quat = t.compute_transformation(path, mir_pos) 
@@ -427,7 +426,7 @@ class robot():
     def run(self):
         """Publishes Joint velocities to reach EEF-goal. So that all joints approx. reach goal at same time.
         """
-        print(self.i)
+        rospy.loginfo(self.i)
         self.i += 1.0
 
         distance_to_goal = math.sqrt(sum((self.goal[i] - self.current_ee_pos[i])**2 for i in range(3)))
@@ -468,7 +467,7 @@ class robot():
         y_pitch = euler[1]
         z_yaw = euler[2]
         self.current_ee_pos = (x, y, z, x_roll, y_pitch, z_yaw)
-        #print(self.current_ee_pos)
+        #rospy.loginfo(self.current_ee_pos)
         
         
 class trans():
@@ -498,10 +497,10 @@ class trans():
             list[float]: [x,y,z, alpha,beta,gamma], list[float]: [x,y,z, a,b,c,d]
         """
         #Tranformation World - MiR-Base
-        print("Zielpose")
-        print(path.poses[0].pose)
-        #print("MiR Pose")
-        #print(mir_pos)
+        rospy.loginfo("Zielpose")
+        rospy.loginfo(path.poses[0].pose)
+        #rospy.loginfo("MiR Pose")
+        #rospy.loginfo(mir_pos)
         
         mir_trans = [mir_pos.position.x, mir_pos.position.y, mir_pos.position.z]
         mir_rot = [mir_pos.orientation.x, mir_pos.orientation.y, mir_pos.orientation.z, mir_pos.orientation.w]
@@ -510,9 +509,9 @@ class trans():
         world_T_mirbase[1][3] = mir_trans[1]
         world_T_mirbase[2][3] = mir_trans[2]
         
-        #print("")
-        #print(mirbase_T_urbase)
-        #print("")
+        #rospy.loginfo("")
+        #rospy.loginfo(mirbase_T_urbase)
+        #rospy.loginfo("")
         
         world_t_ur = np.dot(world_T_mirbase, self.mirbase_T_urbase)
         ur_t_world = np.linalg.inv(world_t_ur)
@@ -521,13 +520,13 @@ class trans():
         # urbase_quat = transformations.quaternion_from_matrix(world_t_ur)
         
         first_pose = path.poses[0].pose
-        print("Distanz MiR - Start")
-        print(first_pose.position.x - world_t_ur[0][3], first_pose.position.y - world_t_ur[1][3])
+        rospy.loginfo("Distanz MiR - Start")
+        rospy.loginfo(f"{first_pose.position.x - world_t_ur[0][3]}, {first_pose.position.y - world_t_ur[1][3]}")
         x1_world = np.matrix([[first_pose.position.x], [first_pose.position.y], [first_pose.position.z], [1]])
-        #print(x1_world)
+        #rospy.loginfo(x1_world)
         x1_urbase = ur_t_world * x1_world
-        #print("x to urbase")
-        #print(x1_urbase)
+        #rospy.loginfo("x to urbase")
+        #rospy.loginfo(x1_urbase)
         tcp_t_ur_euler = [x1_urbase.item(0), x1_urbase.item(1), x1_urbase.item(2) + 0.3, 0, math.pi, -urbase_euler[2]]
         quat = transformations.quaternion_from_euler(tcp_t_ur_euler[3], tcp_t_ur_euler[4], tcp_t_ur_euler[5])
         tcp_t_ur_quat = [tcp_t_ur_euler[0], tcp_t_ur_euler[1], tcp_t_ur_euler[2], quat[0], quat[1], quat[2], quat[3]]
