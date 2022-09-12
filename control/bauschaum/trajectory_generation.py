@@ -247,19 +247,14 @@ class trajectory_generation():
         ur_trajectory.header.frame_id = "map"
         ur_trajectory.header.stamp = rospy.Time.now()
 
-        # # Because first goal of trajectory is not reached by cartesain formation controller
-        # # not working, probably because of another controller
-        # mir=MirNav2Goal("/mur216")
-        # first_pose = Pose()
-        # first_pose.position.x = self.mir_xhat[0]
-        # first_pose.position.y = self.mir_yhat[0]
-        # first_pose.orientation.w = 0.0
-        # mir.sendGoalPos(first_pose)
-        # print("first mir goal sent")
-        # while not rospy.is_shutdown():
-        #     if mir.is_ready():
-        #         break
-        #     rospy.sleep(0.1)
+        # Because first goal of trajectory is not reached by cartesain formation controller if to far away:
+        mir=MirNav2Goal("/mur216")
+        first_pose = Pose()
+        first_pose.position.x = self.mir_xhat[0]
+        first_pose.position.y = self.mir_yhat[0]
+        first_pose.orientation.w = 1.0
+        mir.sendGoalPos(first_pose)
+        rospy.logdebug("MiR at start position")
 
         mir_trajectory.poses = [PoseStamped() for i in range(len(self.mir_xhat))] 
         ur_trajectory.poses = [PoseStamped() for i in range(len(self.ur_xhat))]
@@ -279,7 +274,7 @@ class trajectory_generation():
             ur_trajectory.poses[i].pose.position.z = ur_trajectory_point.pose.position.z
 
         rospy.sleep(1)
-        mir_pub.publish(mir_trajectory) # TODO:ggf 1. Punkt anders anfahren?
+        mir_pub.publish(mir_trajectory)
         rospy.sleep(2)
         ur_pub.publish(ur_trajectory)
         rospy.sleep(1)
