@@ -21,7 +21,7 @@ class ur_velocity_controller():
     
     def __init__(self, ns="mur216", group_name="UR_arm"):
         rospy.Subscriber('ur_trajectory', Path, self.ur_trajectory_cb)
-        rospy.Subscriber('/mur_tcp_pose', Pose, self.tcp_pose_cb)
+        # rospy.Subscriber('/mur_tcp_pose', Pose, self.tcp_pose_cb)   #TODO: identisch mit /tool0_pose?
         rospy.Subscriber('/tool0_pose', Pose, self.ur_pose_cb)
         rospy.Subscriber('joint_states', JointState, self.joint_states_cb)
         
@@ -59,8 +59,8 @@ class ur_velocity_controller():
         self.w_rot = 0.0
 
 
-        rospy.wait_for_message('/mur_tcp_pose', Pose)
-        rospy.loginfo("TCP-Pose received ...")
+        # rospy.wait_for_message('/mur_tcp_pose', Pose)
+        rospy.loginfo("TCP-Pose not via /mur_tcp_pose. using /tool0_pose instead")
         rospy.wait_for_message('amcl_pose', Pose)
         rospy.loginfo("MiR-Pose received ...")
         rospy.wait_for_message('/tool0_pose', Pose)
@@ -318,7 +318,7 @@ class ur_velocity_controller():
         self.specified_mir_vel.twist=data
  
     def tcp_pose_cb(self, data):
-        """Actual tcp pose
+        """Actual tcp pose. Topic not published?
         """
         self.tcp_pose = data
         
@@ -328,9 +328,10 @@ class ur_velocity_controller():
         self.mir_pose = data.pose.pose
         
     def ur_pose_cb(self, data):
-        """Verwendet in "get_distance_mir_ur()"
+        """Verwendet in "get_distance_mir_ur() TODO: tcp_pose jetzt hier mit definiert"
         """
         self.ur_pose = data
+        self.tcp_pose = data
 
     # WIRD NICHT VERWENDET:
     ############################
