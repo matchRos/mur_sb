@@ -2,20 +2,38 @@
 
 import math
 import sys
+from turtle import pos
 
 import moveit_commander
 import numpy as np
 import rospy
-from geometry_msgs.msg import Pose, PoseWithCovarianceStamped
+from geometry_msgs.msg import Pose, PoseWithCovarianceStamped, PoseStamped, Pose, Point, Quaternion
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Bool, Float64MultiArray
 from tf import transformations
 from nav_msgs.msg import Path
 import tf
+from bauschaum.match_lib.match_geometry import inverseTransformationMat
+from controller_manager_msgs.srv import SwitchController
 
 np.set_printoptions(precision=8,suppress=True)
 
 
+def switch_controllers(start=['arm_controller'], stop=['joint_group_vel_controller']):
+    rospy.wait_for_service('controller_manager/switch_controller')
+    try:
+        switch_controller = rospy.ServiceProxy('controller_manager/switch_controller', SwitchController)
+        switch_controller(start_controllers=start, stop_controllers=stop, strictness=2)
+        return True
+    except rospy.ServiceException as e:
+        print("Service call failed: %s"%e)
+        return False
+
+def switch_to_moveit():
+    return switch_controllers(['arm_controller'], ['joint_group_vel_controller'])
+
+def switch_to_velocity():
+    return switch_controllers(['joint_group_vel_controller'], ['arm_controller'])
 
 class inversekinematics():
     def __init__(self, pose,ns="mur216", group_name="UR_arm"):
@@ -310,17 +328,21 @@ class inversekinematics():
         
         
 class robot():  
-    def __init__(self, ns="mur216", group_name="UR_arm"):
+    def __init__(self, ns="mur216", group_name="UR_arm", use_moveit=True):
         rospy.init_node("ur_start")
         rospy.Subscriber('/tool0_pose', Pose, self.vel_cb)
         rospy.Subscriber('joint_states', JointState, self.joint_states_cb)
         moveit_commander.roscpp_initialize(sys.argv)
         # self.robot = moveit_commander.RobotCommander(robot_description= ns+"/robot_description") #, ns="ns")
-        # self.group = moveit_commander.MoveGroupCommander(group_name, robot_description= ns+"/robot_description",wait_for_servers=5.0) #, ns=ns)
+        self.group = moveit_commander.MoveGroupCommander(group_name, robot_description= ns+"/robot_description",wait_for_servers=5.0) #, ns=ns)
         self.joint_vel_pub = rospy.Publisher("/"+ns+"/joint_group_vel_controller/command", Float64MultiArray, queue_size=1)
         self.pos_reached = rospy.Publisher('/ur_initialized', Bool, queue_size=1)
         self.first_call = True
         self.joint_group_vel = Float64MultiArray()
+        self.listener=tf.TransformListener()
+        self.use_moveit = use_moveit
+        self.path=Path()
+        self.first_pose_rel = [0.0]*6
 
         self.reset()
 
@@ -338,6 +360,8 @@ class robot():
         first_call = True
         #### Wait for Initialization ####
         path = rospy.wait_for_message("ur_path", Path)
+        # path = rospy.wait_for_message("ur_trajectory", Path)
+        self.path=path
         request = False
         rate = rospy.Rate(1)
         while not request:
@@ -345,7 +369,7 @@ class robot():
                 return  # remaining code of function doesnt need to be called
             request = rospy.get_param('/mir_initialized', False)
             rospy.loginfo("Wait for MiR to be initialized...")
-            rospy.loginfo(f"MiR initialized: {str(request)}")
+            # rospy.loginfo(f"MiR initialized: {str(request)}")
             rate.sleep()
         
         
@@ -354,29 +378,53 @@ class robot():
             first_call = False
         # Goal-transformation from UR-Base to TCP
         t = trans()
-        tcp_t_ur_euler, tcp_t_ur_quat = t.compute_transformation(path, mir_pos) 
+        tcp_t_ur_euler, tcp_t_ur_quat = t.compute_transformation(path, mir_pos)
+        rospy.loginfo(f"tcp_t_ur_quat: {tcp_t_ur_quat}")
 
-        ### Calculate IK ###
-        ik = inversekinematics(tcp_t_ur_quat)
+        # for MoveIt: base_footprint is reference link
+        tMat_tcp = transformations.euler_matrix(tcp_t_ur_euler[3], tcp_t_ur_euler[4], tcp_t_ur_euler[5], 'sxyz')
+        tMat_tcp[0][3] = tcp_t_ur_quat[0]
+        tMat_tcp[1][3] = tcp_t_ur_quat[1]
+        tMat_tcp[2][3] = tcp_t_ur_quat[2]
+        tMat_tcp=np.array(tMat_tcp)
+        rospy.loginfo(f"tMat_tcp: {tMat_tcp}")
+        self.listener.waitForTransform("/mur216/UR16/base_link", "/mur216/base_footprint", rospy.Time(), rospy.Duration(4.0))
+        transf=self.listener.lookupTransform('/mur216/base_footprint','/mur216/UR16/base_link', rospy.Time(0))
+        rospy.loginfo(f"looking up transform to base_footprint for moveit in sim. transf= {transf}")
+        baseTfootprint = np.diag([1.0,1.0,1.0,1.0])
+        r_baseTfootprint = transf[0]    # keine Drehung
+        rospy.loginfo(f"r_baseTfootprint: {r_baseTfootprint}")
+        baseTfootprint[0:3,3] = r_baseTfootprint
+        rospy.loginfo(f"baseTfootprint: {baseTfootprint}")
+        # tMat_ur_tcp = inverseTransformationMat(t.mirbase_T_urbase) @ tMat_tcp
+        tMat_ur_tcp = baseTfootprint @ tMat_tcp
+        rospy.loginfo(f"tMat_ur_tcp: {tMat_ur_tcp}")
+        self.first_pose_rel = Pose(position=Point(*tMat_ur_tcp[0:3,3]), orientation=Quaternion(*transformations.quaternion_from_matrix(tMat_ur_tcp)))
+        rospy.loginfo(f"first_pose_rel: {self.first_pose_rel}")
 
-        #Gelenkwinkelkonfigurationen
-        ik.calc_solutions([],0)
-        rospy.loginfo("Moegliche Loesungen")
-        for sol in ik.solutions:
-            #test_solution(sol)
-            rospy.loginfo(sol)
-        rospy.loginfo("")
-        
-        # Select best IK config.
-        ik_solution = ik.select_solution(ik.solutions)
-        
-        #UR control
-        self.joint_togoal_diff = ik.diff_to_goal
-        self.joint_goal = ik_solution
-        self.goal = tcp_t_ur_euler
 
-        self.acceleration = 0.0
-        self.i = 0.0       #TODO: wofuer?
+        if not self.use_moveit:
+            ### Calculate IK ###
+            ik = inversekinematics(tcp_t_ur_quat)
+            
+            #Gelenkwinkelkonfigurationen
+            ik.calc_solutions([],0)
+            rospy.loginfo("Moegliche Loesungen")
+            for sol in ik.solutions:
+                #test_solution(sol)
+                rospy.loginfo(sol)
+            rospy.loginfo("")
+            
+            # Select best IK config.
+            ik_solution = ik.select_solution(ik.solutions)
+            
+            #UR control
+            self.joint_togoal_diff = ik.diff_to_goal
+            self.joint_goal = ik_solution
+            self.goal = tcp_t_ur_euler
+
+            self.acceleration = 0.0
+            self.i = 0.0       #TODO: wofuer?
          
     def joint_vel(self, i, joint_goal, velocity=0.05):
         """Return positive/negative velocity depending on joint goal direction
@@ -426,20 +474,21 @@ class robot():
     def run(self):
         """Publishes Joint velocities to reach EEF-goal. So that all joints approx. reach goal at same time.
         """
-        rospy.loginfo(self.i)
+        # rospy.loginfo(self.i)
         self.i += 1.0
 
         distance_to_goal = math.sqrt(sum((self.goal[i] - self.current_ee_pos[i])**2 for i in range(3)))
-
+        rospy.loginfo(f"distance_to_goal: {distance_to_goal}")
         accel = self.calc_accel(distance_to_goal)
 
         # get max Joint Diff
         max_joint_diff = max(map(abs, self.joint_togoal_diff))
+        rospy.loginfo(f"max_joint_diff: {max_joint_diff}")
 
         cmd_joint_vel = [accel * self.joint_vel(i, self.joint_goal) * abs(self.joint_togoal_diff[i]) / abs(max_joint_diff) for i in range(6)]
         self.joint_group_vel.data = cmd_joint_vel 
                
-        if cmd_joint_vel == [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] and distance_to_goal < 0.05:
+        if all(v<0.1 for v in cmd_joint_vel) and distance_to_goal < 0.05:
             rospy.set_param("/ur_initialized", True) 
             self.joint_group_vel.data = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
             # self.joint_vel_pub.publish(self.joint_group_vel)   # TODO: warum nicht? bzw. if am Schluss? --> Restbewegung?
@@ -486,7 +535,7 @@ class trans():
                                     [0,0,0,1]])
             
     def compute_transformation(self, path, mir_pos):
-        """Computs Transformation between UR_Base and first path pose 
+        """Computs Transformation between UR_Base and first path pose. Distanz is calculated from mir_pos to first path pose
 
         Args:
             path (nav_msgs.Path): goal path
@@ -514,17 +563,20 @@ class trans():
         #rospy.loginfo("")
         
         world_t_ur = np.dot(world_T_mirbase, self.mirbase_T_urbase)
-        ur_t_world = np.linalg.inv(world_t_ur)
+        # ur_t_world = np.linalg.inv(world_t_ur)
+        ur_t_world = inverseTransformationMat(world_t_ur)
 
         urbase_euler = transformations.euler_from_matrix(world_t_ur)
         # urbase_quat = transformations.quaternion_from_matrix(world_t_ur)
         
         first_pose = path.poses[0].pose
         rospy.loginfo("Distanz MiR - Start")
-        rospy.loginfo(f"{first_pose.position.x - world_t_ur[0][3]}, {first_pose.position.y - world_t_ur[1][3]}")
+        rospy.loginfo(f"{first_pose.position.x - world_t_ur[0][3]}, {first_pose.position.y - world_t_ur[1][3]}, {first_pose.position.z - world_t_ur[2][3]}")
         x1_world = np.matrix([[first_pose.position.x], [first_pose.position.y], [first_pose.position.z], [1]])
         #rospy.loginfo(x1_world)
-        x1_urbase = ur_t_world * x1_world
+        x1_urbase = ur_t_world @ x1_world
+        rospy.loginfo(f"Z World: {x1_world[2]}")
+        rospy.loginfo(f"Z Base: {x1_urbase[2]}")
         #rospy.loginfo("x to urbase")
         #rospy.loginfo(x1_urbase)
         tcp_t_ur_euler = [x1_urbase.item(0), x1_urbase.item(1), x1_urbase.item(2) + 0.3, 0, math.pi, -urbase_euler[2]]
@@ -535,12 +587,38 @@ class trans():
         
 
 if __name__ == "__main__":
-
-    ur = robot()
+    use_moveit = False
+    rospy.loginfo("Starting node")
+    ur = robot(use_moveit=use_moveit)
     rate = rospy.Rate(100)
-    while not rospy.is_shutdown():
-        ur.run()
-        rate.sleep()
+    if not use_moveit:
+        switch_to_velocity()
+        rospy.loginfo("Not using moveit")
+        while not rospy.is_shutdown():
+            ur.run()
+            rate.sleep()
+    else:
+        switch_to_moveit()
+        rospy.loginfo("Using moveit")
+        # pose_goal = Pose(position=Point(*ur.first_pose_rel[:3]), orientation=Quaternion(*ur.first_pose_rel[3:]))
+        pose_goal = ur.first_pose_rel
+        rospy.loginfo(f"Pose for MoveIT: {pose_goal}")
+        # pose_ur_map = ur.path.poses[0].pose
+        # pose_goal = pose_ur_map
+
+        # ur.group.set_pose_reference_frame("map")
+        pose_msg = PoseStamped()
+        pose_msg.header.frame_id = "base_footprint"
+        pose_msg.header.stamp = rospy.Time.now()
+        pose_msg.pose = pose_goal
+        ur.group.set_pose_target(pose_msg)
+        success = ur.group.go(wait=True)
+        rospy.loginfo(f"Moveit success: {success}")
+        if success is not True:
+            rospy.logerr(f"Moveit failed pose_goal: {pose_goal}")
+            sys.exit(1)
+        switch_to_velocity()
+        rospy.set_param("/ur_initialized", True)
     
 
         

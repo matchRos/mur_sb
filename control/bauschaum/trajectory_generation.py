@@ -247,14 +247,20 @@ class trajectory_generation():
         ur_trajectory.header.frame_id = "map"
         ur_trajectory.header.stamp = rospy.Time.now()
 
-        # Because first goal of trajectory is not reached by cartesain formation controller if to far away:
+        # Because first goal of trajectory is not reached by cartesain formation controller
+        # not working, probably because of another controller?
         mir=MirNav2Goal("/mur216")
         first_pose = Pose()
         first_pose.position.x = self.mir_xhat[0]
         first_pose.position.y = self.mir_yhat[0]
         first_pose.orientation.w = 1.0
         mir.sendGoalPos(first_pose)
-        rospy.logdebug("MiR at start position")
+        while not rospy.is_shutdown():
+            res = mir.is_ready()
+            if res:
+                break
+            rospy.sleep(0.5)
+        rospy.logdebug("MiR at goal")
 
         mir_trajectory.poses = [PoseStamped() for i in range(len(self.mir_xhat))] 
         ur_trajectory.poses = [PoseStamped() for i in range(len(self.ur_xhat))]
