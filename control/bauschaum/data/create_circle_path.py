@@ -42,10 +42,10 @@ p_ur = get_path_points(circle_ur)
 # p_mir=np.flip(p_mir, axis=0)
 # p_ur=np.flip(p_ur, axis=0)
 
-p_mir=p_mir[-2000:,:]
-p_ur=p_ur[-2000:,:]
+p_mir=p_mir[:-2000:-1,:]
+p_ur=p_ur[-21:-2020:-1,:]
 
-p_ur = np.append(p_ur,np.ones((p_ur.shape[0],1))*0.1, axis=1)
+p_ur = np.append(p_ur,np.ones((p_ur.shape[0],1))*0.35, axis=1)
 
 layers=2
 layer_h = 0.3

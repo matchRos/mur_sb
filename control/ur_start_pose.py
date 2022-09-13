@@ -39,7 +39,7 @@ class inversekinematics():
     def __init__(self, pose,ns="mur216", group_name="UR_arm"):
         # Eingabe der Zielposition
         self.goal_pose = pose 
-        rospy.loginfo("Pose: ")
+        rospy.loginfo("IK Pose: ")
         rospy.loginfo(pose)
         # moveit_commander.roscpp_initialize(sys.argv)
         # # group_name = "manipulator"
@@ -94,11 +94,12 @@ class inversekinematics():
             numpy.array(4,4): Transformation Matrix
         """
         rot_twist = [self.goal_pose[3], self.goal_pose[4], self.goal_pose[5], self.goal_pose[6]]
-        correct_rot = transformations.quaternion_about_axis(math.pi, (0, 0, 1))
+        # correct_rot = transformations.quaternion_about_axis(math.pi, (0, 0, 1))
+        correct_rot = transformations.quaternion_about_axis(0, (0, 0, 1))
         rot = transformations.quaternion_multiply(rot_twist, correct_rot)
         self.t0_6 = transformations.quaternion_matrix(rot)
-        self.t0_6[0][3] = -self.goal_pose[0]
-        self.t0_6[1][3] = -self.goal_pose[1]
+        self.t0_6[0][3] = self.goal_pose[0]
+        self.t0_6[1][3] = self.goal_pose[1]
         self.t0_6[2][3] = self.goal_pose[2]
         rospy.loginfo(self.t0_6)
         return self.t0_6#np.around(self.t0_6, 10)
@@ -298,9 +299,9 @@ class inversekinematics():
         sec = []
         third = []
         for i in range(8):
-            if (-3.0) / 4.0 * math.pi < solutions[i][1] < (-1.0) / 4.0 * math.pi:
+            if (-3.0) / 4.0 * math.pi < solutions[i][1] < (-1.0) / 4.0 * math.pi: #and abs(solutions[i][0]) < math.pi/2:
                 first.append(i)
-            elif (-1.0) * math.pi < solutions[i][1] < 0.0:
+            elif (-1.0) * math.pi < solutions[i][1] < 0.0: # and abs(solutions[i][0]) < math.pi/2:
                 sec.append(i)
             else:
                 third.append(i)
@@ -320,6 +321,7 @@ class inversekinematics():
             a = self.solution_min_diff(solutions, difference_solutions, sec)
             return a
         elif third:
+            rospy.loginfo("only third solutions. q2>0 or q2<-pi")
             a = self.solution_min_diff(solutions, difference_solutions, third)
             return a
         else:
@@ -409,7 +411,18 @@ class robot():
             
             #Gelenkwinkelkonfigurationen
             ik.calc_solutions([],0)
-            rospy.loginfo("Moegliche Loesungen")
+            rospy.loginfo("Moegliche Loesungen wahre Pose")
+            for sol in ik.solutions:
+                #test_solution(sol)
+                rospy.loginfo(sol)
+            rospy.loginfo("")
+
+            # test for switched goal: TODO: check if this is necessary
+            ik.goal_pose = [*self.first_pose_rel.position.__reduce__()[2], *self.first_pose_rel.orientation.__reduce__()[2]]
+            rospy.loginfo(f"goal_pose: {ik.goal_pose}")
+            ik.solutions = []
+            ik.calc_solutions([],0)
+            rospy.loginfo("Moegliche Loesungen first_pose_rel")
             for sol in ik.solutions:
                 #test_solution(sol)
                 rospy.loginfo(sol)
@@ -478,12 +491,13 @@ class robot():
         self.i += 1.0
 
         distance_to_goal = math.sqrt(sum((self.goal[i] - self.current_ee_pos[i])**2 for i in range(3)))
-        rospy.loginfo(f"distance_to_goal: {distance_to_goal}")
+        if not self.i%50:   # dont spam
+            rospy.loginfo(f"distance_to_goal: {distance_to_goal}")
         accel = self.calc_accel(distance_to_goal)
 
         # get max Joint Diff
         max_joint_diff = max(map(abs, self.joint_togoal_diff))
-        rospy.loginfo(f"max_joint_diff: {max_joint_diff}")
+        # rospy.loginfo(f"max_joint_diff: {max_joint_diff}")
 
         cmd_joint_vel = [accel * self.joint_vel(i, self.joint_goal) * abs(self.joint_togoal_diff[i]) / abs(max_joint_diff) for i in range(6)]
         self.joint_group_vel.data = cmd_joint_vel 
@@ -491,7 +505,7 @@ class robot():
         if all(v<0.1 for v in cmd_joint_vel) and distance_to_goal < 0.05:
             rospy.set_param("/ur_initialized", True) 
             self.joint_group_vel.data = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-            # self.joint_vel_pub.publish(self.joint_group_vel)   # TODO: warum nicht? bzw. if am Schluss? --> Restbewegung?
+            self.joint_vel_pub.publish(self.joint_group_vel)   # TODO: warum nicht? bzw. if am Schluss? --> Restbewegung?
             rospy.signal_shutdown("Position reached...")
         
         self.joint_vel_pub.publish(self.joint_group_vel)
@@ -528,7 +542,8 @@ class trans():
         R_z_180 = [[-0.999999, -0.004538, 0], 
                    [0.004538, -0.999999, 0],          
                    [0, 0, 1]] 
-        t_mir_ur = [0.173364, -0.102631, 0.45]
+        # t_mir_ur = [0.173364, -0.102631, 0.45]
+        t_mir_ur = [-0.173364, 0.102631, 0.45]  # x,y umgekehrt. TODO: besser aus tf holen
         self.mirbase_T_urbase = np.array([[R_z_180[0][0],R_z_180[0][1],R_z_180[0][2],t_mir_ur[0]],
                                     [R_z_180[1][0],R_z_180[1][1],R_z_180[1][2],t_mir_ur[1]],
                                     [R_z_180[2][0],R_z_180[2][1],R_z_180[2][2],t_mir_ur[2]],
@@ -594,10 +609,22 @@ if __name__ == "__main__":
     if not use_moveit:
         switch_to_velocity()
         rospy.loginfo("Not using moveit")
-        while not rospy.is_shutdown():
-            ur.run()
-            rate.sleep()
+        # while not rospy.is_shutdown():
+        #     ur.run()
+        #     rate.sleep()
+        switch_to_moveit()
+        rospy.loginfo(f"joint angles: {ur.joint_goal}")
+        success = ur.group.go(ur.joint_goal, wait=True)
+        ur.group.stop()
+        if success is not True:
+            rospy.logerr(f"Moveit failed pose_goal")
+            sys.exit(1)
+        switch_to_velocity()
+        rospy.loginfo("UR initialized, sleeping 2s")
+        rospy.set_param("/ur_initialized", True)
+        
     else:
+        # MoveIt to Pose not working
         switch_to_moveit()
         rospy.loginfo("Using moveit")
         # pose_goal = Pose(position=Point(*ur.first_pose_rel[:3]), orientation=Quaternion(*ur.first_pose_rel[3:]))

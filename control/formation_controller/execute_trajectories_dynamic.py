@@ -38,7 +38,6 @@ class execute_trajectories_node():
 
         # Move to initial pose
         # Because first goal of trajectory is not reached by cartesain formation controller
-        # not working, probably because of another controller?
         mir=MirNav2Goal("/mur216")
         first_pose = Pose()
         first_pose.position.x = self.target_trajectories[0].x[0]
@@ -53,7 +52,7 @@ class execute_trajectories_node():
         rospy.logdebug("MiR at goal")
 
         # Move to initial pose Via formation controller
-        for i in range(0,2):
+        for i in range(0,1):    # warum?
             
             # Turn towards the initial pose
             rospy.loginfo("turning towards initial pose")
