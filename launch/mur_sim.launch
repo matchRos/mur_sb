@@ -22,7 +22,9 @@
 			<arg name="robot_yaw"  value="$(arg robot_yaw)"/>
 			<arg name="model_name" value="$(arg model_name)"/>
 			<arg name="robot_urdf_path" value="$(arg robot_urdf_path)"/>
-			<arg name="add_spawn_args" value="-J UR16/shoulder_lift_joint -0.7 -J UR16/elbow_joint 1.5 -J UR16/shoulder_pan_joint 0.0 -J UR16/wrist_1_joint -2.4 -J UR16/wrist_2_joint -1.5621"/>
+			<!-- <arg name="add_spawn_args" value="-J UR16/shoulder_lift_joint -0.7 -J UR16/elbow_joint 1.5 -J UR16/shoulder_pan_joint 0.0 -J UR16/wrist_1_joint -2.4 -J UR16/wrist_2_joint -1.5621"/> -->
+			<!-- 1.5601472624388606, -2.587638077291936, -1.363669475276887, -0.9665857266916063, 1.5712602500272297, -2.1364874278617663e-06 -->
+			<arg name="add_spawn_args" value="-J UR16/shoulder_pan_joint 1.5678655285071859 -J UR16/shoulder_lift_joint -2.587638077291936 -J UR16/elbow_joint -1.363669475276887 -J UR16/wrist_1_joint -0.9665857266916063 -J UR16/wrist_2_joint 1.5712602500272297"/>
 
 			<arg name="move_base_selector" value="$(arg move_base_selector)"/>
 			<arg name="global_planner" value="$(arg global_planner)" />

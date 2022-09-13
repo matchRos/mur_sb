@@ -11,7 +11,7 @@
 
     <group ns = "$(arg model_name)">
 
-        <node name="parse_path_trafo" type="parse_path_trafo.py" pkg="bauschaum" output="screen"/>
+        <node name="parse_path_trafo" type="parse_path_trafo_circle.py" pkg="mur_sb" output="screen"/>
 
         <node name="trajectory_generation" type="trajectory_generation.py" pkg="mur_sb" output="screen"/>
 
