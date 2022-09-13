@@ -200,7 +200,7 @@ class ur_velocity_controller():
         
         cartesian_velocities_matrix = np.matrix.transpose(np.matrix(velocities))
           
-        joint_velocities = jacobian_inverse * cartesian_velocities_matrix
+        joint_velocities = jacobian_inverse @ cartesian_velocities_matrix
         joint_group_vel.data = (np.asarray(joint_velocities)).flatten()
         
         return joint_group_vel
@@ -251,7 +251,9 @@ class ur_velocity_controller():
             
             #TCP velocity in ur_base_link
             tcp_vel_ur = [final_tcp_vel_mir_base[0], final_tcp_vel_mir_base[1], 0, 0, 0, 0]
+            rospy.loginfo("tcp_vel_ur: x,y=" + str(tcp_vel_ur[0]) + "," + str(tcp_vel_ur[1]))
             joint_group_vel = self.differential_inverse_kinematics_ur(tcp_vel_ur)
+            rospy.loginfo("joint_group_vel: " + str(joint_group_vel.data)+"\nfor jointstates: "+str(self.joint_states))
 
             #publish joint velocities
             self.target_pose_broadcaster([set_pose_x,set_pose_y,set_pose_phi])
@@ -259,15 +261,15 @@ class ur_velocity_controller():
             self.joint_group_vel_pub.publish(joint_group_vel)
 
             print(self.i, distance, dis_x, dis_y)
-            if self.csv_first_call:
-                with open('/home/rosmatch/Dokumente/tolerance_no_con_2_3.csv', 'w') as test:
-                    writer = csv.writer(test)
-                    writer.writerow([self.i, distance, dis_x, dis_y])
-                    self.csv_first_call = False
-            else:  
-                with open('/home/rosmatch/Dokumente/tolerance_no_con_2_3.csv', 'a') as test:
-                    writer = csv.writer(test)
-                    writer.writerow([self.i, distance, dis_x, dis_y])
+            # if self.csv_first_call:
+            #     with open('/home/rosmatch/Dokumente/tolerance_no_con_2_3.csv', 'w') as test:
+            #         writer = csv.writer(test)
+            #         writer.writerow([self.i, distance, dis_x, dis_y])
+            #         self.csv_first_call = False
+            # else:  
+            #     with open('/home/rosmatch/Dokumente/tolerance_no_con_2_3.csv', 'a') as test:
+            #         writer = csv.writer(test)
+            #         writer.writerow([self.i, distance, dis_x, dis_y])
             
             self.i += 1
 
@@ -308,7 +310,7 @@ class ur_velocity_controller():
             trajectory_w.append(trajectory_phi[i+1]-trajectory_phi[i])
 
         self.trajectorie = [trajectory_x, trajectory_y, trajectory_phi, trajectory_v, trajectory_w]
-        rospy.loginfo("trajectory received")
+        rospy.loginfo("ur trajectory received")
            
     def mir_vel_cb(self, data):
         """cmd_vel wird verwendet
@@ -393,7 +395,7 @@ class ur_velocity_controller():
             trajectory_w.append(trajectory_phi[i+1]-trajectory_phi[i])
 
         self.mir_trajectorie = [trajectory_v, trajectory_w]
-        rospy.loginfo("trajectory received")
+        rospy.loginfo("mir trajectory received")
         
     def mir_vel_odom_cb(self, data):
         """Wird nicht verwendet. Stattdessen mir_vel_cb
