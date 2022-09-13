@@ -1,0 +1,14 @@
+<launch>
+	<arg name="ns"    default="mur216" />
+	<arg name="pkg"   doc="package name" />
+	<arg name="node"   doc="node to start" />
+	<arg name="node_name" default="node_in_ns" />
+	<arg name="node_args"   default="" />
+
+	<group ns = "$(arg ns)">
+		<node name="$(arg node_name)" pkg="$(arg pkg)" type="$(arg node)" output="screen"
+			args="$(arg node_args)">
+		</node>
+	</group> 
+
+</launch>
