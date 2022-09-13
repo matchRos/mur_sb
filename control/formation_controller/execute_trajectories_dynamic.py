@@ -11,6 +11,8 @@ from cartesian_controller import cartesian_controller
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64
 
+from match_lib.match_robots import MirNav2Goal
+
 
 
 class execute_trajectories_node():
@@ -35,6 +37,22 @@ class execute_trajectories_node():
         idx = 0
 
         # Move to initial pose
+        # Because first goal of trajectory is not reached by cartesain formation controller
+        # not working, probably because of another controller?
+        mir=MirNav2Goal("/mur216")
+        first_pose = Pose()
+        first_pose.position.x = self.target_trajectories[0].x[0]
+        first_pose.position.y = self.target_trajectories[0].y[0]
+        first_pose.orientation.w = 1.0
+        mir.sendGoalPos(first_pose)
+        while not rospy.is_shutdown():
+            res = mir.is_ready()
+            if res:
+                break
+            rospy.sleep(0.5)
+        rospy.logdebug("MiR at goal")
+
+        # Move to initial pose Via formation controller
         for i in range(0,2):
             
             # Turn towards the initial pose
@@ -230,7 +248,7 @@ class execute_trajectories_node():
         self.cmd_vel_publishers = []
         self.robot_command = Twist()
         self.pose_broadcaster = tf.TransformBroadcaster()
-        self.K_phi = 0.5
+        self.K_phi = 0.3
         self.K_d = 0.5
         self.limit_w = 0.3
         self.limit_x = 0.1
