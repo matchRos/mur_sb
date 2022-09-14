@@ -16,6 +16,7 @@ from sensor_msgs.msg import JointState
 import csv
 
 from robot_mats.jacobians.jacobian_ur_16_eef import getJacobianUr16_base_link_inertiaUr16_wrist_3_link as getJacobian
+from formation_controller.match_lib.match_robots import Joints
 class ur_velocity_controller():
     
     
@@ -23,7 +24,8 @@ class ur_velocity_controller():
         rospy.Subscriber('ur_trajectory', Path, self.ur_trajectory_cb)
         # rospy.Subscriber('/mur_tcp_pose', Pose, self.tcp_pose_cb)   #TODO: identisch mit /tool0_pose?
         rospy.Subscriber('/tool0_pose', Pose, self.ur_pose_cb)
-        rospy.Subscriber('joint_states', JointState, self.joint_states_cb)
+        # rospy.Subscriber('joint_states', JointState, self.joint_states_cb)
+        self.joint_obj = Joints()
         
         self.specified_mir_vel = TwistStamped()
         rospy.Subscriber('mobile_base_controller/cmd_vel', Twist, self.mir_vel_cb)
@@ -192,9 +194,10 @@ class ur_velocity_controller():
             Float64MultiArray: joint_group_vel
         """
         joint_group_vel = Float64MultiArray()
-        current_joints = self.joint_states#self.group.get_current_joint_values()
-        # jm = np.array(self.group.get_jacobian_matrix(current_joints))
-        jm = getJacobian(current_joints)
+        # current_joints = self.joint_states#self.group.get_current_joint_values()
+        # # jm = np.array(self.group.get_jacobian_matrix(current_joints))
+        # jm = getJacobian(current_joints)
+        jm = self.joint_obj.getJacobian()
         jacobian_matrix = np.matrix(jm)
         jacobian_inverse = np.linalg.inv(jacobian_matrix)
         
@@ -253,7 +256,7 @@ class ur_velocity_controller():
             tcp_vel_ur = [final_tcp_vel_mir_base[0], final_tcp_vel_mir_base[1], 0, 0, 0, 0]
             rospy.loginfo("tcp_vel_ur: x,y=" + str(tcp_vel_ur[0]) + "," + str(tcp_vel_ur[1]))
             joint_group_vel = self.differential_inverse_kinematics_ur(tcp_vel_ur)
-            rospy.loginfo("joint_group_vel: " + str(joint_group_vel.data)+"\nfor jointstates: "+str(self.joint_states))
+            rospy.loginfo("joint_group_vel: " + str(joint_group_vel.data)+"\nfor jointstates: "+str(self.joint_obj.q))
 
             #publish joint velocities
             self.target_pose_broadcaster([set_pose_x,set_pose_y,set_pose_phi])
@@ -282,10 +285,10 @@ class ur_velocity_controller():
                      transformations.quaternion_from_euler(0, 0, target_pose[2]),
                      rospy.Time.now(), frame_id, "map")
     
-    
-    def joint_states_cb(self, data):  
-        a = data #a = joint_states_mixed
-        self.joint_states = [a.position[2], a.position[1], a.position[0], a.position[3], a.position[4], a.position[5]]
+    # # Using Joints() instead because of false joints if via idx only (especially if using mur instead of ur)
+    # def joint_states_cb(self, data):  
+    #     a = data #a = joint_states_mixed
+    #     self.joint_states = [a.position[2], a.position[1], a.position[0], a.position[3], a.position[4], a.position[5]]
     
     
     def ur_trajectory_cb(self,Path):

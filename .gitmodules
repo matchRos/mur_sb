@@ -4,6 +4,3 @@
 [submodule "control/formation_controller/match_lib"]
 	path = control/formation_controller/match_lib
 	url = https://github.com/pumablattlaus/match_lib.git
-[submodule "control/robot_mats"]
-	path = control/robot_mats
-	url = https://github.com/pumablattlaus/robot_mats.git
