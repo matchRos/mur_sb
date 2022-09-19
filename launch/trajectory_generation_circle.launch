@@ -22,9 +22,9 @@
 
         <node name="ur_start_pose" type="ur_start_pose.py" pkg="mur_sb" output="screen"/> 
 
-        <!-- <node name="ur_execute_trajectory" type="ur_execute_trajectory.py" pkg="mur_sb" output="screen">
-                <rosparam command="load" file="$(find bauschaum)/config/trajectory_generation_config.yaml"/>
-        </node> -->
+        <node name="ur_execute_trajectory" type="ur_execute_trajectory.py" pkg="mur_sb" output="screen">
+                <rosparam command="load" file="$(find mur_sb)/control/bauschaum/config/trajectory_generation_config.yaml"/>
+        </node>
     </group>
     <!-- <node name="ur_start_pose" type="ur_start_pose.py" pkg="mur_sb" output="screen"/>  -->
 </launch>

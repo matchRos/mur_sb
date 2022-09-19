@@ -338,38 +338,6 @@ class ur_velocity_controller():
         self.ur_pose = data
         self.tcp_pose = data
 
-    # WIRD NICHT VERWENDET:
-    ############################
-    def velocity_controller(self, v_target):
-        """Sets control rate in proportion to the target velocity. r_new = r_old*(v_target/v + 2)/3.
-        NOT IN USE
-
-        Args:
-            v_target (float): absolute target velocity
-        """
-        if self.first_call:
-            self.pose_n = self.tcp_pose
-            self.time_n = rospy.get_time()
-            self.first_call = False
-        else:
-            self.time_n_minus_1 = self.time_n
-            self.pose_n_minus_1 = self.pose_n
-            self.pose_n = self.tcp_pose
-            self.time_n = rospy.get_time()
-            time_diff = self.time_n - self.time_n_minus_1
-
-            x_vel = (self.pose_n.position.x - self.pose_n_minus_1.position.x)/time_diff
-            y_vel = (self.pose_n.position.y - self.pose_n_minus_1.position.y)/time_diff
-            velocity = pow(pow(x_vel,2) + pow(y_vel,2),0.5)
-            
-            if velocity == 0:
-                v_target_relativ = 1.0
-            else:
-                v_target_relativ = abs(v_target) / velocity 
-                
-            actual_goal_rate = self.control_rate * v_target_relativ
-            self.control_rate  = (actual_goal_rate + 2 * self.control_rate) / 3 #muted_rate
-
     def path_cb(self, data):
         """Wird nicht verwendet
         """
