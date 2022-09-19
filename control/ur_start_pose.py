@@ -3,7 +3,7 @@
 import math
 import sys
 from turtle import pos
-
+from nav_msgs.msg import Odometry
 import moveit_commander
 import numpy as np
 import rospy
@@ -376,7 +376,7 @@ class robot():
         
         
         if first_call:  # TODO: first call always true? 
-            mir_pos = rospy.wait_for_message('amcl_pose', PoseWithCovarianceStamped).pose.pose
+            mir_pos = rospy.wait_for_message('ground_truth', Odometry).pose.pose
             first_call = False
         # Goal-transformation from UR-Base to TCP
         t = trans()
@@ -605,47 +605,53 @@ if __name__ == "__main__":
     use_moveit = False
     rospy.loginfo("Starting node")
     ur = robot(use_moveit=use_moveit)
-    rate = rospy.Rate(100)
-    if not use_moveit:
-        switch_to_velocity()
-        rospy.loginfo("Not using moveit")
-        # while not rospy.is_shutdown():
-        #     ur.run()
-        #     rate.sleep()
-        switch_to_moveit()
-        rospy.loginfo(f"joint angles: {ur.joint_goal}")
-        success = ur.group.go(ur.joint_goal, wait=True)
-        ur.group.stop()
-        if success is not True:
-            rospy.logerr(f"Moveit failed pose_goal")
-            sys.exit(1)
-        switch_to_velocity()
-        rospy.loginfo("UR initialized, sleeping 2s")
-        rospy.set_param("/ur_initialized", True)
-        
-    else:
-        # MoveIt to Pose not working
-        switch_to_moveit()
-        rospy.loginfo("Using moveit")
-        # pose_goal = Pose(position=Point(*ur.first_pose_rel[:3]), orientation=Quaternion(*ur.first_pose_rel[3:]))
-        pose_goal = ur.first_pose_rel
-        rospy.loginfo(f"Pose for MoveIT: {pose_goal}")
-        # pose_ur_map = ur.path.poses[0].pose
-        # pose_goal = pose_ur_map
 
-        # ur.group.set_pose_reference_frame("map")
-        pose_msg = PoseStamped()
-        pose_msg.header.frame_id = "base_footprint"
-        pose_msg.header.stamp = rospy.Time.now()
-        pose_msg.pose = pose_goal
-        ur.group.set_pose_target(pose_msg)
-        success = ur.group.go(wait=True)
-        rospy.loginfo(f"Moveit success: {success}")
-        if success is not True:
-            rospy.logerr(f"Moveit failed pose_goal: {pose_goal}")
-            sys.exit(1)
-        switch_to_velocity()
-        rospy.set_param("/ur_initialized", True)
+    print(ur.joint_goal)
+
+    ur.group.go(ur.joint_goal, wait=True)
+
+    ur.group.stop()
+    # rate = rospy.Rate(100)
+    # if not use_moveit:
+    #     switch_to_velocity()
+    #     rospy.loginfo("Not using moveit")
+    #     # while not rospy.is_shutdown():
+    #     #     ur.run()
+    #     #     rate.sleep()
+    #     switch_to_moveit()
+    #     rospy.loginfo(f"joint angles: {ur.joint_goal}")
+    #     success = ur.group.go(ur.joint_goal, wait=True)
+    #     ur.group.stop()
+    #     if success is not True:
+    #         rospy.logerr(f"Moveit failed pose_goal")
+    #         sys.exit(1)
+    #     switch_to_velocity()
+    #     rospy.loginfo("UR initialized, sleeping 2s")
+    #     rospy.set_param("/ur_initialized", True)
+        
+    # else:
+    #     # MoveIt to Pose not working
+    #     switch_to_moveit()
+    #     rospy.loginfo("Using moveit")
+    #     # pose_goal = Pose(position=Point(*ur.first_pose_rel[:3]), orientation=Quaternion(*ur.first_pose_rel[3:]))
+    #     pose_goal = ur.first_pose_rel
+    #     rospy.loginfo(f"Pose for MoveIT: {pose_goal}")
+    #     # pose_ur_map = ur.path.poses[0].pose
+    #     # pose_goal = pose_ur_map
+
+    #     # ur.group.set_pose_reference_frame("map")
+    #     pose_msg = PoseStamped()
+    #     pose_msg.header.frame_id = "base_footprint"
+    #     pose_msg.header.stamp = rospy.Time.now()
+    #     pose_msg.pose = pose_goal
+    #     ur.group.set_pose_target(pose_msg)
+    #     success = ur.group.go(wait=True)
+    #     rospy.loginfo(f"Moveit success: {success}")
+    #     if success is not True:
+    #         rospy.logerr(f"Moveit failed pose_goal: {pose_goal}")
+    #         sys.exit(1)
+    #     switch_to_velocity()
+    #     rospy.set_param("/ur_initialized", True)
     
 
         

@@ -10,7 +10,7 @@ from geometry_msgs.msg import Twist, PoseWithCovarianceStamped, Pose
 from cartesian_controller import cartesian_controller
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64
-
+from nav_msgs.msg import Odometry
 from match_lib.match_robots import MirNav2Goal
 
 
@@ -266,7 +266,7 @@ class execute_trajectories_node():
             param = "~robot" + str(i) + "_pose_topic"
             robotX_pose_topic = rospy.get_param(param)
             self.robot_poses.append(Pose())
-            rospy.Subscriber(robotX_pose_topic, PoseWithCovarianceStamped, self.robot_pose_cb, i)
+            rospy.Subscriber(robotX_pose_topic, Odometry, self.robot_pose_cb, i)
 
             param = "~robot" + str(i) + "_cmd_vel_topic"
             topic = rospy.get_param(param)
