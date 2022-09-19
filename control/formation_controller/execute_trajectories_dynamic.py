@@ -9,7 +9,6 @@ import math
 from geometry_msgs.msg import Twist, PoseWithCovarianceStamped, Pose
 from cartesian_controller import cartesian_controller
 from sensor_msgs.msg import JointState
-from std_msgs.msg import Float64
 from nav_msgs.msg import Odometry
 from match_lib.match_robots import MirNav2Goal
 
@@ -138,10 +137,9 @@ class execute_trajectories_node():
             
             
         #### Main loop #####  
-        #rate = rospy.Rate(self.control_rate)
+        rate = rospy.Rate(self.control_rate)
         
         while not rospy.is_shutdown() and idx < len(self.target_trajectories[0].v):
-            rate =rospy.Rate(self.compute_rate())
             w_filtered = 0.0
             v_filtered = 0.0
             for i in range(0,self.number_of_robots):
@@ -164,38 +162,6 @@ class execute_trajectories_node():
             idx += 1
             #rospy.loginfo(idx)
             rate.sleep()
-
-
-    def compute_rate(self):
-        
-        Kp = 100.0
-        angle_error = math.pi/2 - self.ur_base_angle
-        self.multiplicator = self.control_rate - Kp * angle_error
-        
-        if self.multiplicator < 1.0:
-            #rospy.logerr_throttle("control rate negative")
-            self.multiplicator = 1.0
-        elif self.multiplicator > 150.0:
-            self.multiplicator = 150.0
-            
-        rospy.loginfo_throttle(1,"Multiplicator: " + str(self.multiplicator))
-        rospy.loginfo_throttle(1,"Angle UR: " + str(self.ur_base_angle))
-            
-        return self.multiplicator
-        
-        # if (math.pi/6) < self.ur_base_angle < (math.pi/2):
-        #     ratio = (self.ur_base_angle - math.pi/6) / (math.pi/2 - math.pi/6)
-        #     self.multiplicator = actual_rate * pow(ratio, 0.5)
-        # elif (math.pi * 0.75) > self.ur_base_angle > (math.pi/2):
-        #     ratio = self.ur_base_angle / (math.pi/2)
-        #     actual_rate = actual_rate * ratio
-        # else:
-        #     actual_rate = 1
-        
-
-            
-        
-
 
     def trajectory_cb(self,Path,robot_index):
         trajectory = MyTrajectory()
