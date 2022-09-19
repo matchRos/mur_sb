@@ -10,3 +10,12 @@ auf Master (/dev/sdb3 fuer altes SKript):
 Testvorgabe Objekt fuer ur_start..: scripts/publisher wall
 
 Noch math domain errors bei schelchter Ausrichtung UR (acos?)
+
+
+## Simulation
+```
+roslaunch mur_sb mur_sim.launch
+roslaunch mur_sb trajectory_generation_circle.launch
+rosrun mur_sb ur_execute_trajectory.py
+rosrun mur_sb pub_circle_pose.py
+```
