@@ -1,1 +1,10 @@
 .vscode
+control/__pycache__/inverse_kinematics.cpython-38.pyc
+control/bauschaum/__pycache__/mypath.cpython-38.pyc
+control/bauschaum/data/__pycache__/circle_mirx.cpython-38.pyc
+control/bauschaum/data/__pycache__/circle_miry.cpython-38.pyc
+control/bauschaum/data/__pycache__/circle_urx.cpython-38.pyc
+control/bauschaum/data/__pycache__/circle_ury.cpython-38.pyc
+control/bauschaum/data/__pycache__/circle_urz.cpython-38.pyc
+control/formation_controller/__pycache__/cartesian_controller.cpython-38.pyc
+control/formation_controller/__pycache__/mypath.cpython-38.pyc
