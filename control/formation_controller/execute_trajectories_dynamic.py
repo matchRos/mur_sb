@@ -51,7 +51,7 @@ class execute_trajectories_node():
         rospy.logdebug("MiR at goal")
 
         # Move to initial pose Via formation controller
-        for i in range(0,1):    # warum?
+        for index in range(0,1):    # warum?
             
             # Turn towards the initial pose
             rospy.loginfo("turning towards initial pose")
@@ -64,7 +64,13 @@ class execute_trajectories_node():
                     phi_actual = transformations.euler_from_quaternion([act_pose.orientation.x,act_pose.orientation.y,act_pose.orientation.z,act_pose.orientation.w])
                     phi_target = math.atan2(set_pose_y-act_pose.position.y,set_pose_x-act_pose.position.x)
                     e_phi = phi_target - phi_actual[2]
+                    
 
+                    if e_phi > math.pi:
+                        e_phi = e_phi - 2*math.pi
+                    elif e_phi < -math.pi:
+                        e_phi = e_phi + 2*math.pi
+                    print(f"e_phi: {e_phi}")
                     self.robot_command.angular.z = self.K_phi * e_phi
                     if abs(self.robot_command.angular.z) > self.limit_w:
                         self.robot_command.angular.z = self.robot_command.angular.z / abs(self.robot_command.angular.z) * self.limit_w
@@ -109,7 +115,11 @@ class execute_trajectories_node():
                     phi_actual = transformations.euler_from_quaternion([act_pose.orientation.x,act_pose.orientation.y,act_pose.orientation.z,act_pose.orientation.w])
                     phi_target = self.target_trajectories[i].phi[0]
                     e_phi = phi_target - phi_actual[2]
-
+                    if e_phi > math.pi:
+                            e_phi = e_phi - 2*math.pi
+                    elif e_phi < -math.pi:
+                        e_phi = e_phi + 2*math.pi
+                    print(f"e_phi2: {e_phi}")
                     self.robot_command.angular.z = self.K_phi * e_phi
                     if abs(self.robot_command.angular.z) > self.limit_w:
                         self.robot_command.angular.z = self.robot_command.angular.z / abs(self.robot_command.angular.z) * self.limit_w
@@ -217,7 +227,7 @@ class execute_trajectories_node():
         self.K_d = 0.5
         self.limit_w = 0.3
         self.limit_x = 0.1
-        self.target_threshhold_angular = 0.03
+        self.target_threshhold_angular = 0.06
         self.target_threshhold_linear = 0.15
         self.filter_const = 0.1
         self.filter_const_vel = 1.0
