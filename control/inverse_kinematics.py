@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from cmath import nan
 import math
 import numpy as np
 import rospy
@@ -150,8 +151,12 @@ class Inverse_kinematics():
         P1_4xz = math.sqrt(P1_4x * P1_4x + P1_4z * P1_4z)   # TODO: P1_4xz² is sufficient (see below)
 
         # TODO: check if value is in domain ("Value Error: math domain error")
-        return [-math.acos((P1_4xz * P1_4xz - self.a2 * self.a2 - self.a3 * self.a3) / (2 * self.a2 * self.a3)),
-                math.acos((P1_4xz * P1_4xz - self.a2 * self.a2 - self.a3 * self.a3) / (2 * self.a2 * self.a3))]
+        if (2 * self.a2 * self.a3) == 0 or (P1_4xz * P1_4xz - self.a2 * self.a2 - self.a3 * self.a3) / (2 * self.a2 *
+            self.a3) > 1 or (P1_4xz * P1_4xz - self.a2 * self.a2 - self.a3 * self.a3) / (2 * self.a2 * self.a3) < -1:
+            return [nan]
+        else:
+            return [-math.acos((P1_4xz * P1_4xz - self.a2 * self.a2 - self.a3 * self.a3) / (2 * self.a2 * self.a3)),
+                    math.acos((P1_4xz * P1_4xz - self.a2 * self.a2 - self.a3 * self.a3) / (2 * self.a2 * self.a3))]
 
 
     def calc_q4(self, q2, q3, T1_4):
@@ -216,8 +221,12 @@ class Inverse_kinematics():
         elif i == 5:
             T1_4 = kwargs.get('T', None)
             for q4 in self.calc_q4(solution[1], solution[2], T1_4):
-                solution[3] = q4
-                self.calc_solutions(list(solution),i+1)
+                if q4 != nan:
+                    solution[3] = q4
+                    self.calc_solutions(list(solution),i+1)
+                else:
+                    rospy.logwarn("q4 is nan")
+                    print(solution)
         elif i == 6:
             self.solutions.append(solution)
 
@@ -271,7 +280,8 @@ class Inverse_kinematics():
         first = []
         sec = []
         third = []
-        for i in range(8):
+        rospy.loginfo("solutions: %s", solutions)
+        for i in range(len(solutions)):
             if (-3.0) / 4.0 * math.pi < solutions[i][1] < (-1.0) / 4.0 * math.pi: #and abs(solutions[i][0]) < math.pi/2:
                 first.append(i)
             elif (-1.0) * math.pi < solutions[i][1] < 0.0: # and abs(solutions[i][0]) < math.pi/2:
