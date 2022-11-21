@@ -275,11 +275,6 @@ class ur_velocity_controller():
                      transformations.quaternion_from_euler(0, 0, target_pose[3]),
                      rospy.Time.now(), frame_id, "map")
     
-    # # Using Joints() instead because of false joints if via idx only (especially if using mur instead of ur)
-    # def joint_states_cb(self, data):  
-    #     a = data #a = joint_states_mixed
-    #     self.joint_states = [a.position[2], a.position[1], a.position[0], a.position[3], a.position[4], a.position[5]]
-    
     
     def ur_trajectory_cb(self,Path):
         """Vorgegebene Trajektorie
