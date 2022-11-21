@@ -70,7 +70,6 @@ class execute_trajectories_node():
                         e_phi = e_phi - 2*math.pi
                     elif e_phi < -math.pi:
                         e_phi = e_phi + 2*math.pi
-                    print(f"e_phi: {e_phi}")
                     self.robot_command.angular.z = self.K_phi * e_phi
                     if abs(self.robot_command.angular.z) > self.limit_w:
                         self.robot_command.angular.z = self.robot_command.angular.z / abs(self.robot_command.angular.z) * self.limit_w
@@ -79,7 +78,6 @@ class execute_trajectories_node():
                         correct_orientation += 1
                     self.cmd_vel_publishers[i].publish(self.robot_command)
 
-                    rospy.logdebug(f"{i} phi {e_phi,self.robot_command.angular.z}")
                 rate.sleep()
 
             # move linear to the initial pose
@@ -99,8 +97,7 @@ class execute_trajectories_node():
                             self.robot_command.linear.x = 0
                             correct_distance += 1
                         self.cmd_vel_publishers[i].publish(self.robot_command)
-                    
-                        rospy.logdebug(f"l {e_d}")
+
                         rate.sleep()
 
             self.target_threshhold_angular *= 0.5
@@ -119,7 +116,6 @@ class execute_trajectories_node():
                             e_phi = e_phi - 2*math.pi
                     elif e_phi < -math.pi:
                         e_phi = e_phi + 2*math.pi
-                    print(f"e_phi2: {e_phi}")
                     self.robot_command.angular.z = self.K_phi * e_phi
                     if abs(self.robot_command.angular.z) > self.limit_w:
                         self.robot_command.angular.z = self.robot_command.angular.z / abs(self.robot_command.angular.z) * self.limit_w
@@ -128,7 +124,7 @@ class execute_trajectories_node():
                         correct_orientation += 1
                     self.cmd_vel_publishers[i].publish(self.robot_command)
                 
-                    rospy.logdebug(e_phi)
+                    #rospy.logdebug(e_phi)
 
         rospy.set_param("/mir_initialized",True)
         rospy.loginfo("MiR initialized")
@@ -170,7 +166,6 @@ class execute_trajectories_node():
                 self.actual_pose_broadcaster(act_pose,i)
 
             idx += 1
-            #rospy.loginfo(idx)
             rate.sleep()
 
     def trajectory_cb(self,Path,robot_index):
@@ -192,7 +187,6 @@ class execute_trajectories_node():
             trajectory.w.append(trajectory.phi[i+1]-trajectory.phi[i])
 
         self.target_trajectories.append(trajectory)
-        rospy.loginfo(f"trajectory {str(robot_index)} received")
 
 
     def robot_pose_cb(self,msg=PoseWithCovarianceStamped(),robot_index=0):
@@ -223,8 +217,8 @@ class execute_trajectories_node():
         self.cmd_vel_publishers = []
         self.robot_command = Twist()
         self.pose_broadcaster = tf.TransformBroadcaster()
-        self.K_phi = 0.3
-        self.K_d = 0.5
+        self.K_phi = 0.6
+        self.K_d = 0.7
         self.limit_w = 0.3
         self.limit_x = 0.1
         self.target_threshhold_angular = 0.06
@@ -236,7 +230,6 @@ class execute_trajectories_node():
         for i in range(0,self.number_of_robots):
             param = "~robot" + str(i) + "_trajectory_topic"
             robotX_trajectory_topic = rospy.get_param(param)
-            rospy.logdebug(f"robotX_trajectory_topic: {robotX_trajectory_topic}")
             rospy.Subscriber(robotX_trajectory_topic, Path, self.trajectory_cb, i)
 
             param = "~robot" + str(i) + "_pose_topic"

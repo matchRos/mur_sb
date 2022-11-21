@@ -13,14 +13,15 @@ from nav_msgs.msg import Path
 from nav_msgs.msg import Odometry
 import tf
 from sensor_msgs.msg import JointState
-import csv
+#import csv
 
 from formation_controller.match_lib.robot_mats.jacobians.jacobian_ur_16_eef import getJacobianUr16_base_link_inertiaUr16_wrist_3_link as getJacobian
 from formation_controller.match_lib.match_robots import Joints
 class ur_velocity_controller():
     
     
-    def __init__(self, ns="mur216", group_name="UR_arm"):
+    def __init__(self):
+        self.config()   # load parameters
         rospy.Subscriber('ur_trajectory', Path, self.ur_trajectory_cb)
         # rospy.Subscriber('/mur_tcp_pose', Pose, self.tcp_pose_cb)   #TODO: identisch mit /tool0_pose?
         rospy.Subscriber('/tool0_pose', Pose, self.ur_pose_cb)
@@ -51,22 +52,14 @@ class ur_velocity_controller():
         """Resets all variables
         """
 
-        #Parameters for current TCP velocity / differential kinematics
-        self.first_call = True
-        self.csv_first_call = True
-        self.time_n = 0.0
-        self.time_n_minus_1 = 0.0
-        self.pose_n = Pose()
-        self.pose_n_minus_1 = Pose()
+        # self.pose_n = Pose()
+        # self.pose_n_minus_1 = Pose()
         self.w_rot = 0.0
 
-
-        # rospy.wait_for_message('/mur_tcp_pose', Pose)
-        rospy.loginfo("TCP-Pose not via /mur_tcp_pose. using /tool0_pose instead")
-        rospy.wait_for_message('amcl_pose', Pose)
+        rospy.wait_for_message('ground_truth', Odometry)
         rospy.loginfo("MiR-Pose received ...")
-        rospy.wait_for_message('/tool0_pose', Pose)
-        rospy.loginfo("Tool0-Pose received ...")
+        # rospy.wait_for_message('/tool0_pose', Pose)
+        # rospy.loginfo("Tool0-Pose received ...")
         
         rospy.set_param("/ur_initialized", False)   # TODO: was passiert wenn ur_start_pose zu frueh gestartet wurde? (param schon true)
         ur_request = rospy.get_param("/ur_initialized", False)
@@ -74,14 +67,15 @@ class ur_velocity_controller():
         while not rospy.is_shutdown() and ur_request == False:
             ur_request = rospy.get_param("/ur_initialized", False)
             if ur_request == True:
-                print("UR initialized")
+                self.run()
+                print("UR initialized 123")
+                break
             else: 
                 #print("Waiting for UR to be initialized...")
                 pass
-        rospy.loginfo("Running ...")
+        rospy.logerr("Running ...")
         
-        self.control_rate = 100 #rospy.get_param("~self.control_rate")
-        self.i = 1  # number of calls of run(): trajectory idx
+        
 
     
     def get_distance_mir_ur(self):
@@ -234,6 +228,7 @@ class ur_velocity_controller():
     def run(self):
         """calculates joint velocities by cartesian position error and trajectory velocity. Takes current MiR velocity into account. Trajectory velocity proportional to control rate.
         """
+        rospy.loginfo("Starting position controller")
         rate = rospy.Rate(self.control_rate)
         listener = tf.TransformListener()
         listener.waitForTransform("map", "mur216/UR16/tool0", rospy.Time(), rospy.Duration(4.0))
@@ -249,7 +244,7 @@ class ur_velocity_controller():
             #position controller
             u_x, u_y, u_z, distance, dis_x, dis_y = self.position_controller(set_pose_x, set_pose_y, set_pose_z, trans[0], trans[1], trans[2])
             tcp_initial_vel = self.get_tcp_initial_vel()    # only the part induced by mir to world velocity 
-            #print("Durchlauf: " + str(self.i))
+            print("Durchlauf: " + str(self.i))
             target_tcp_vel = self.trajectory_velocity(set_pose_phi, v_target)
 
             # Goal velocity of ur relative to mir:
@@ -369,6 +364,9 @@ class ur_velocity_controller():
         """Wird nicht verwendet. Stattdessen mir_vel_cb
         """
         self.specified_mir_vel = data   
+
+    def config(self):
+        self.control_rate = rospy.get_param('~control_rate', 100)
         
 if __name__ == "__main__":
     rospy.init_node("ur_velocity_controller")

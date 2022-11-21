@@ -15,7 +15,6 @@ def cartesian_controller(act_pose,set_pose_x,set_pose_y,w_target,v_target,phi_ta
 
     e_x = (set_pose_x-act_pose.position.x)
     e_y = (set_pose_y - act_pose.position.y)
-    rospy.loginfo_throttle(1,[id,e_x,e_y])
     e_local_x = math.cos(phi_act[2]) * e_x + math.sin(phi_act[2]) * e_y
     e_local_y = math.cos(phi_act[2]) * e_y - math.sin(phi_act[2]) * e_x
 
