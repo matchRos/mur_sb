@@ -24,13 +24,13 @@ class ur_velocity_controller():
         self.config()   # load parameters
         rospy.Subscriber('ur_trajectory', Path, self.ur_trajectory_cb)
         # rospy.Subscriber('/mur_tcp_pose', Pose, self.tcp_pose_cb)   #TODO: identisch mit /tool0_pose?
-        rospy.Subscriber('/tool0_pose', Pose, self.ur_pose_cb)
+        rospy.Subscriber('tool0_pose', Pose, self.ur_pose_cb)
         # rospy.Subscriber('joint_states', JointState, self.joint_states_cb)
         self.joint_obj = Joints()
         
         self.specified_mir_vel = TwistStamped()
         rospy.Subscriber('mobile_base_controller/cmd_vel', Twist, self.mir_vel_cb)
-        rospy.Subscriber('amcl_pose', PoseWithCovarianceStamped, self.mir_pose_cb)
+        rospy.Subscriber('ground_truth', Odometry, self.mir_pose_cb)
         
         # Subscribers Not in use:
         rospy.Subscriber("ur_path", Path, self.path_cb)
@@ -232,6 +232,7 @@ class ur_velocity_controller():
         rate = rospy.Rate(self.control_rate)
         listener = tf.TransformListener()
         listener.waitForTransform("map", "mur216/UR16/tool0", rospy.Time(), rospy.Duration(4.0))
+        self.i = 0
         while not rospy.is_shutdown() and self.i < len(self.trajectorie[3]):
             (trans,rot) = listener.lookupTransform('map','mur216/UR16/tool0', rospy.Time(0))
             set_pose_x      = self.trajectorie[0][self.i]
@@ -244,7 +245,6 @@ class ur_velocity_controller():
             #position controller
             u_x, u_y, u_z, distance, dis_x, dis_y = self.position_controller(set_pose_x, set_pose_y, set_pose_z, trans[0], trans[1], trans[2])
             tcp_initial_vel = self.get_tcp_initial_vel()    # only the part induced by mir to world velocity 
-            print("Durchlauf: " + str(self.i))
             target_tcp_vel = self.trajectory_velocity(set_pose_phi, v_target)
 
             # Goal velocity of ur relative to mir:
@@ -319,7 +319,7 @@ class ur_velocity_controller():
         """
         self.tcp_pose = data
         
-    def mir_pose_cb(self, data=PoseWithCovarianceStamped()):
+    def mir_pose_cb(self, data=Odometry):
         """Nur fuer orientation. Transformationen zwischen v_x_mir und v_x_world.
         """
         self.mir_pose = data.pose.pose
