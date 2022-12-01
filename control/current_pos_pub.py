@@ -18,17 +18,17 @@ if __name__ == "__main__":
     
     listener = tf.TransformListener()
     
-    robot_pose = rospy.Publisher('/tool0_pose', Pose, queue_size=1)
+    robot_pose = rospy.Publisher('tool0_pose', Pose, queue_size=1)
 
-    listener.waitForTransform(ns_prefix + 'base_link', ns_prefix + 'tool0', rospy.Time(), rospy.Duration(4.0))
-    rate = rospy.Rate(10.0)
+    listener.waitForTransform(ns_prefix + 'base_link', ns_prefix + 'UR16/tool0', rospy.Time(), rospy.Duration(4.0))
+    rate = rospy.Rate(100.0)
     #print("Receiving...")
     
     while not rospy.is_shutdown():
         try:
             now = rospy.Time.now()
-            listener.waitForTransform(ns_prefix+ "base_link", ns_prefix + "tool0", now, rospy.Duration(4.0))
-            (trans,rot) = listener.lookupTransform(ns_prefix+'base_link', ns_prefix+'tool0', now)
+            # listener.waitForTransform(ns_prefix+ "base_link", ns_prefix + "UR16/tool0", now, rospy.Duration(4.0))
+            (trans,rot) = listener.lookupTransform(ns_prefix+'base_link', ns_prefix+'UR16/tool0', now)
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
             continue
         cmd = Pose()

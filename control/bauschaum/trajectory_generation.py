@@ -95,7 +95,7 @@ class trajectory_generation():
         
         mir_index = 1
         ur_index = 1
-        current_velocity_lin = 0.0
+        # current_velocity_lin = 0.0
         mir_current_velocity_lin = 0.0
         ur_current_velocity_lin = 0.0
         mir_dist = 0.0
@@ -110,7 +110,7 @@ class trajectory_generation():
         mir_path_distance = self.mir_path.v[0]
         mir_current_angle = self.mir_path.phi[0]
         ur_path_distance = self.ur_path.v[0]
-        ur_current_angle = self.ur_path.phi[0]
+        # ur_current_angle = self.ur_path.phi[0]
 
         while not rospy.is_shutdown() and self.target_reached == False:
             # calculate remaining distance to the next control point

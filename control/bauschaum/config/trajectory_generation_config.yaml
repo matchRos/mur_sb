@@ -15,7 +15,7 @@ robot0_trajectory_topic : mir_trajectory
 robot0_cmd_vel_topic: mobile_base_controller/cmd_vel
 
 # robot0_pose_topic : mur/mir/robot_pose
-robot0_pose_topic : amcl_pose
+robot0_pose_topic : ground_truth
 #robot1_pose_topic : /robot1/robot_pose
 #robot2_pose_topic : /robot2/robot_pose
 #robot0_pose_topic: /amcl_pose
